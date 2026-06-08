@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as SellRouteImport } from './routes/sell'
 import { Route as SearchRouteImport } from './routes/search'
 import { Route as OrdersRouteImport } from './routes/orders'
@@ -18,6 +19,11 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as ShopShopIdRouteImport } from './routes/shop.$shopId'
 import { Route as OrderOrderIdRouteImport } from './routes/order.$orderId'
 
+const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
+  id: '/sitemap.xml',
+  path: '/sitemap.xml',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SellRoute = SellRouteImport.update({
   id: '/sell',
   path: '/sell',
@@ -66,6 +72,7 @@ export interface FileRoutesByFullPath {
   '/orders': typeof OrdersRoute
   '/search': typeof SearchRoute
   '/sell': typeof SellRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/order/$orderId': typeof OrderOrderIdRoute
   '/shop/$shopId': typeof ShopShopIdRoute
 }
@@ -76,6 +83,7 @@ export interface FileRoutesByTo {
   '/orders': typeof OrdersRoute
   '/search': typeof SearchRoute
   '/sell': typeof SellRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/order/$orderId': typeof OrderOrderIdRoute
   '/shop/$shopId': typeof ShopShopIdRoute
 }
@@ -87,6 +95,7 @@ export interface FileRoutesById {
   '/orders': typeof OrdersRoute
   '/search': typeof SearchRoute
   '/sell': typeof SellRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/order/$orderId': typeof OrderOrderIdRoute
   '/shop/$shopId': typeof ShopShopIdRoute
 }
@@ -99,6 +108,7 @@ export interface FileRouteTypes {
     | '/orders'
     | '/search'
     | '/sell'
+    | '/sitemap.xml'
     | '/order/$orderId'
     | '/shop/$shopId'
   fileRoutesByTo: FileRoutesByTo
@@ -109,6 +119,7 @@ export interface FileRouteTypes {
     | '/orders'
     | '/search'
     | '/sell'
+    | '/sitemap.xml'
     | '/order/$orderId'
     | '/shop/$shopId'
   id:
@@ -119,6 +130,7 @@ export interface FileRouteTypes {
     | '/orders'
     | '/search'
     | '/sell'
+    | '/sitemap.xml'
     | '/order/$orderId'
     | '/shop/$shopId'
   fileRoutesById: FileRoutesById
@@ -130,12 +142,20 @@ export interface RootRouteChildren {
   OrdersRoute: typeof OrdersRoute
   SearchRoute: typeof SearchRoute
   SellRoute: typeof SellRoute
+  SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   OrderOrderIdRoute: typeof OrderOrderIdRoute
   ShopShopIdRoute: typeof ShopShopIdRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/sitemap.xml': {
+      id: '/sitemap.xml'
+      path: '/sitemap.xml'
+      fullPath: '/sitemap.xml'
+      preLoaderRoute: typeof SitemapDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/sell': {
       id: '/sell'
       path: '/sell'
@@ -202,9 +222,20 @@ const rootRouteChildren: RootRouteChildren = {
   OrdersRoute: OrdersRoute,
   SearchRoute: SearchRoute,
   SellRoute: SellRoute,
+  SitemapDotxmlRoute: SitemapDotxmlRoute,
   OrderOrderIdRoute: OrderOrderIdRoute,
   ShopShopIdRoute: ShopShopIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
