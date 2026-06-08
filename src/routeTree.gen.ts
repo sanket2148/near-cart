@@ -9,38 +9,188 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
+import { Route as SellRouteImport } from './routes/sell'
+import { Route as SearchRouteImport } from './routes/search'
+import { Route as OrdersRouteImport } from './routes/orders'
+import { Route as CheckoutRouteImport } from './routes/checkout'
+import { Route as CartRouteImport } from './routes/cart'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ShopShopIdRouteImport } from './routes/shop.$shopId'
+import { Route as OrderOrderIdRouteImport } from './routes/order.$orderId'
 
+const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
+  id: '/sitemap.xml',
+  path: '/sitemap.xml',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SellRoute = SellRouteImport.update({
+  id: '/sell',
+  path: '/sell',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SearchRoute = SearchRouteImport.update({
+  id: '/search',
+  path: '/search',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OrdersRoute = OrdersRouteImport.update({
+  id: '/orders',
+  path: '/orders',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CheckoutRoute = CheckoutRouteImport.update({
+  id: '/checkout',
+  path: '/checkout',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const CartRoute = CartRouteImport.update({
+  id: '/cart',
+  path: '/cart',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ShopShopIdRoute = ShopShopIdRouteImport.update({
+  id: '/shop/$shopId',
+  path: '/shop/$shopId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const OrderOrderIdRoute = OrderOrderIdRouteImport.update({
+  id: '/order/$orderId',
+  path: '/order/$orderId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/cart': typeof CartRoute
+  '/checkout': typeof CheckoutRoute
+  '/orders': typeof OrdersRoute
+  '/search': typeof SearchRoute
+  '/sell': typeof SellRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/order/$orderId': typeof OrderOrderIdRoute
+  '/shop/$shopId': typeof ShopShopIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/cart': typeof CartRoute
+  '/checkout': typeof CheckoutRoute
+  '/orders': typeof OrdersRoute
+  '/search': typeof SearchRoute
+  '/sell': typeof SellRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/order/$orderId': typeof OrderOrderIdRoute
+  '/shop/$shopId': typeof ShopShopIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/cart': typeof CartRoute
+  '/checkout': typeof CheckoutRoute
+  '/orders': typeof OrdersRoute
+  '/search': typeof SearchRoute
+  '/sell': typeof SellRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/order/$orderId': typeof OrderOrderIdRoute
+  '/shop/$shopId': typeof ShopShopIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/cart'
+    | '/checkout'
+    | '/orders'
+    | '/search'
+    | '/sell'
+    | '/sitemap.xml'
+    | '/order/$orderId'
+    | '/shop/$shopId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/cart'
+    | '/checkout'
+    | '/orders'
+    | '/search'
+    | '/sell'
+    | '/sitemap.xml'
+    | '/order/$orderId'
+    | '/shop/$shopId'
+  id:
+    | '__root__'
+    | '/'
+    | '/cart'
+    | '/checkout'
+    | '/orders'
+    | '/search'
+    | '/sell'
+    | '/sitemap.xml'
+    | '/order/$orderId'
+    | '/shop/$shopId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  CartRoute: typeof CartRoute
+  CheckoutRoute: typeof CheckoutRoute
+  OrdersRoute: typeof OrdersRoute
+  SearchRoute: typeof SearchRoute
+  SellRoute: typeof SellRoute
+  SitemapDotxmlRoute: typeof SitemapDotxmlRoute
+  OrderOrderIdRoute: typeof OrderOrderIdRoute
+  ShopShopIdRoute: typeof ShopShopIdRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/sitemap.xml': {
+      id: '/sitemap.xml'
+      path: '/sitemap.xml'
+      fullPath: '/sitemap.xml'
+      preLoaderRoute: typeof SitemapDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sell': {
+      id: '/sell'
+      path: '/sell'
+      fullPath: '/sell'
+      preLoaderRoute: typeof SellRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/search': {
+      id: '/search'
+      path: '/search'
+      fullPath: '/search'
+      preLoaderRoute: typeof SearchRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/orders': {
+      id: '/orders'
+      path: '/orders'
+      fullPath: '/orders'
+      preLoaderRoute: typeof OrdersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/checkout': {
+      id: '/checkout'
+      path: '/checkout'
+      fullPath: '/checkout'
+      preLoaderRoute: typeof CheckoutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/cart': {
+      id: '/cart'
+      path: '/cart'
+      fullPath: '/cart'
+      preLoaderRoute: typeof CartRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -48,22 +198,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/shop/$shopId': {
+      id: '/shop/$shopId'
+      path: '/shop/$shopId'
+      fullPath: '/shop/$shopId'
+      preLoaderRoute: typeof ShopShopIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/order/$orderId': {
+      id: '/order/$orderId'
+      path: '/order/$orderId'
+      fullPath: '/order/$orderId'
+      preLoaderRoute: typeof OrderOrderIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  CartRoute: CartRoute,
+  CheckoutRoute: CheckoutRoute,
+  OrdersRoute: OrdersRoute,
+  SearchRoute: SearchRoute,
+  SellRoute: SellRoute,
+  SitemapDotxmlRoute: SitemapDotxmlRoute,
+  OrderOrderIdRoute: OrderOrderIdRoute,
+  ShopShopIdRoute: ShopShopIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
