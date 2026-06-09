@@ -44,8 +44,8 @@ function SellPage() {
         <p className="mt-2 text-sm opacity-90">
           Reach more customers nearby, take orders digitally, and deliver to doorsteps — all from one simple app.
         </p>
-        <Button variant="warm" size="xl" className="mt-5 w-full">
-          Register your shop
+        <Button asChild variant="warm" size="xl" className="mt-5 w-full">
+          <Link to="/seller">Open seller dashboard</Link>
         </Button>
       </section>
 
@@ -66,8 +66,8 @@ function SellPage() {
         <p className="mt-1 text-sm text-muted-foreground">
           Join hundreds of neighborhood shops already on NearCart.
         </p>
-        <Button variant="hero" size="lg" className="mt-4">
-          Get started
+        <Button asChild variant="hero" size="lg" className="mt-4">
+          <Link to="/seller">Get started</Link>
         </Button>
       </div>
     </AppShell>
