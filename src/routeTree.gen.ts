@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
+import { Route as SellerRouteImport } from './routes/seller'
 import { Route as SellRouteImport } from './routes/sell'
 import { Route as SearchRouteImport } from './routes/search'
 import { Route as OrdersRouteImport } from './routes/orders'
@@ -22,6 +23,11 @@ import { Route as OrderOrderIdRouteImport } from './routes/order.$orderId'
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   id: '/sitemap.xml',
   path: '/sitemap.xml',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SellerRoute = SellerRouteImport.update({
+  id: '/seller',
+  path: '/seller',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SellRoute = SellRouteImport.update({
@@ -72,6 +78,7 @@ export interface FileRoutesByFullPath {
   '/orders': typeof OrdersRoute
   '/search': typeof SearchRoute
   '/sell': typeof SellRoute
+  '/seller': typeof SellerRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/order/$orderId': typeof OrderOrderIdRoute
   '/shop/$shopId': typeof ShopShopIdRoute
@@ -83,6 +90,7 @@ export interface FileRoutesByTo {
   '/orders': typeof OrdersRoute
   '/search': typeof SearchRoute
   '/sell': typeof SellRoute
+  '/seller': typeof SellerRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/order/$orderId': typeof OrderOrderIdRoute
   '/shop/$shopId': typeof ShopShopIdRoute
@@ -95,6 +103,7 @@ export interface FileRoutesById {
   '/orders': typeof OrdersRoute
   '/search': typeof SearchRoute
   '/sell': typeof SellRoute
+  '/seller': typeof SellerRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/order/$orderId': typeof OrderOrderIdRoute
   '/shop/$shopId': typeof ShopShopIdRoute
@@ -108,6 +117,7 @@ export interface FileRouteTypes {
     | '/orders'
     | '/search'
     | '/sell'
+    | '/seller'
     | '/sitemap.xml'
     | '/order/$orderId'
     | '/shop/$shopId'
@@ -119,6 +129,7 @@ export interface FileRouteTypes {
     | '/orders'
     | '/search'
     | '/sell'
+    | '/seller'
     | '/sitemap.xml'
     | '/order/$orderId'
     | '/shop/$shopId'
@@ -130,6 +141,7 @@ export interface FileRouteTypes {
     | '/orders'
     | '/search'
     | '/sell'
+    | '/seller'
     | '/sitemap.xml'
     | '/order/$orderId'
     | '/shop/$shopId'
@@ -142,6 +154,7 @@ export interface RootRouteChildren {
   OrdersRoute: typeof OrdersRoute
   SearchRoute: typeof SearchRoute
   SellRoute: typeof SellRoute
+  SellerRoute: typeof SellerRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   OrderOrderIdRoute: typeof OrderOrderIdRoute
   ShopShopIdRoute: typeof ShopShopIdRoute
@@ -154,6 +167,13 @@ declare module '@tanstack/react-router' {
       path: '/sitemap.xml'
       fullPath: '/sitemap.xml'
       preLoaderRoute: typeof SitemapDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/seller': {
+      id: '/seller'
+      path: '/seller'
+      fullPath: '/seller'
+      preLoaderRoute: typeof SellerRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/sell': {
@@ -222,6 +242,7 @@ const rootRouteChildren: RootRouteChildren = {
   OrdersRoute: OrdersRoute,
   SearchRoute: SearchRoute,
   SellRoute: SellRoute,
+  SellerRoute: SellerRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   OrderOrderIdRoute: OrderOrderIdRoute,
   ShopShopIdRoute: ShopShopIdRoute,
@@ -229,3 +250,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
