@@ -17,6 +17,7 @@ import { Route as OrdersRouteImport } from './routes/orders'
 import { Route as CheckoutRouteImport } from './routes/checkout'
 import { Route as CartRouteImport } from './routes/cart'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as SellerIndexRouteImport } from './routes/seller.index'
 import { Route as ShopShopIdRouteImport } from './routes/shop.$shopId'
 import { Route as OrderOrderIdRouteImport } from './routes/order.$orderId'
 
@@ -60,6 +61,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SellerIndexRoute = SellerIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => SellerRoute,
+} as any)
 const ShopShopIdRoute = ShopShopIdRouteImport.update({
   id: '/shop/$shopId',
   path: '/shop/$shopId',
@@ -78,10 +84,11 @@ export interface FileRoutesByFullPath {
   '/orders': typeof OrdersRoute
   '/search': typeof SearchRoute
   '/sell': typeof SellRoute
-  '/seller': typeof SellerRoute
+  '/seller': typeof SellerRouteWithChildren
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/order/$orderId': typeof OrderOrderIdRoute
   '/shop/$shopId': typeof ShopShopIdRoute
+  '/seller/': typeof SellerIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -90,10 +97,10 @@ export interface FileRoutesByTo {
   '/orders': typeof OrdersRoute
   '/search': typeof SearchRoute
   '/sell': typeof SellRoute
-  '/seller': typeof SellerRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/order/$orderId': typeof OrderOrderIdRoute
   '/shop/$shopId': typeof ShopShopIdRoute
+  '/seller': typeof SellerIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -103,10 +110,11 @@ export interface FileRoutesById {
   '/orders': typeof OrdersRoute
   '/search': typeof SearchRoute
   '/sell': typeof SellRoute
-  '/seller': typeof SellerRoute
+  '/seller': typeof SellerRouteWithChildren
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/order/$orderId': typeof OrderOrderIdRoute
   '/shop/$shopId': typeof ShopShopIdRoute
+  '/seller/': typeof SellerIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -121,6 +129,7 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/order/$orderId'
     | '/shop/$shopId'
+    | '/seller/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -129,10 +138,10 @@ export interface FileRouteTypes {
     | '/orders'
     | '/search'
     | '/sell'
-    | '/seller'
     | '/sitemap.xml'
     | '/order/$orderId'
     | '/shop/$shopId'
+    | '/seller'
   id:
     | '__root__'
     | '/'
@@ -145,6 +154,7 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/order/$orderId'
     | '/shop/$shopId'
+    | '/seller/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -154,7 +164,7 @@ export interface RootRouteChildren {
   OrdersRoute: typeof OrdersRoute
   SearchRoute: typeof SearchRoute
   SellRoute: typeof SellRoute
-  SellerRoute: typeof SellerRoute
+  SellerRoute: typeof SellerRouteWithChildren
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   OrderOrderIdRoute: typeof OrderOrderIdRoute
   ShopShopIdRoute: typeof ShopShopIdRoute
@@ -218,6 +228,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/seller/': {
+      id: '/seller/'
+      path: '/'
+      fullPath: '/seller/'
+      preLoaderRoute: typeof SellerIndexRouteImport
+      parentRoute: typeof SellerRoute
+    }
     '/shop/$shopId': {
       id: '/shop/$shopId'
       path: '/shop/$shopId'
@@ -235,6 +252,17 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface SellerRouteChildren {
+  SellerIndexRoute: typeof SellerIndexRoute
+}
+
+const SellerRouteChildren: SellerRouteChildren = {
+  SellerIndexRoute: SellerIndexRoute,
+}
+
+const SellerRouteWithChildren =
+  SellerRoute._addFileChildren(SellerRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   CartRoute: CartRoute,
@@ -242,7 +270,7 @@ const rootRouteChildren: RootRouteChildren = {
   OrdersRoute: OrdersRoute,
   SearchRoute: SearchRoute,
   SellRoute: SellRoute,
-  SellerRoute: SellerRoute,
+  SellerRoute: SellerRouteWithChildren,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   OrderOrderIdRoute: OrderOrderIdRoute,
   ShopShopIdRoute: ShopShopIdRoute,
