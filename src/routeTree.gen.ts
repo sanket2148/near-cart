@@ -19,6 +19,7 @@ import { Route as CartRouteImport } from './routes/cart'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SellerIndexRouteImport } from './routes/seller.index'
 import { Route as ShopShopIdRouteImport } from './routes/shop.$shopId'
+import { Route as SellerProductsRouteImport } from './routes/seller.products'
 import { Route as SellerOrdersRouteImport } from './routes/seller.orders'
 import { Route as OrderOrderIdRouteImport } from './routes/order.$orderId'
 
@@ -72,6 +73,11 @@ const ShopShopIdRoute = ShopShopIdRouteImport.update({
   path: '/shop/$shopId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SellerProductsRoute = SellerProductsRouteImport.update({
+  id: '/products',
+  path: '/products',
+  getParentRoute: () => SellerRoute,
+} as any)
 const SellerOrdersRoute = SellerOrdersRouteImport.update({
   id: '/orders',
   path: '/orders',
@@ -94,6 +100,7 @@ export interface FileRoutesByFullPath {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/order/$orderId': typeof OrderOrderIdRoute
   '/seller/orders': typeof SellerOrdersRoute
+  '/seller/products': typeof SellerProductsRoute
   '/shop/$shopId': typeof ShopShopIdRoute
   '/seller/': typeof SellerIndexRoute
 }
@@ -107,6 +114,7 @@ export interface FileRoutesByTo {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/order/$orderId': typeof OrderOrderIdRoute
   '/seller/orders': typeof SellerOrdersRoute
+  '/seller/products': typeof SellerProductsRoute
   '/shop/$shopId': typeof ShopShopIdRoute
   '/seller': typeof SellerIndexRoute
 }
@@ -122,6 +130,7 @@ export interface FileRoutesById {
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/order/$orderId': typeof OrderOrderIdRoute
   '/seller/orders': typeof SellerOrdersRoute
+  '/seller/products': typeof SellerProductsRoute
   '/shop/$shopId': typeof ShopShopIdRoute
   '/seller/': typeof SellerIndexRoute
 }
@@ -138,6 +147,7 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/order/$orderId'
     | '/seller/orders'
+    | '/seller/products'
     | '/shop/$shopId'
     | '/seller/'
   fileRoutesByTo: FileRoutesByTo
@@ -151,6 +161,7 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/order/$orderId'
     | '/seller/orders'
+    | '/seller/products'
     | '/shop/$shopId'
     | '/seller'
   id:
@@ -165,6 +176,7 @@ export interface FileRouteTypes {
     | '/sitemap.xml'
     | '/order/$orderId'
     | '/seller/orders'
+    | '/seller/products'
     | '/shop/$shopId'
     | '/seller/'
   fileRoutesById: FileRoutesById
@@ -254,6 +266,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ShopShopIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/seller/products': {
+      id: '/seller/products'
+      path: '/products'
+      fullPath: '/seller/products'
+      preLoaderRoute: typeof SellerProductsRouteImport
+      parentRoute: typeof SellerRoute
+    }
     '/seller/orders': {
       id: '/seller/orders'
       path: '/orders'
@@ -273,11 +292,13 @@ declare module '@tanstack/react-router' {
 
 interface SellerRouteChildren {
   SellerOrdersRoute: typeof SellerOrdersRoute
+  SellerProductsRoute: typeof SellerProductsRoute
   SellerIndexRoute: typeof SellerIndexRoute
 }
 
 const SellerRouteChildren: SellerRouteChildren = {
   SellerOrdersRoute: SellerOrdersRoute,
+  SellerProductsRoute: SellerProductsRoute,
   SellerIndexRoute: SellerIndexRoute,
 }
 
