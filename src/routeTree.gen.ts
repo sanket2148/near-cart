@@ -10,18 +10,28 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
+import { Route as SellerRouteImport } from './routes/seller'
 import { Route as SellRouteImport } from './routes/sell'
 import { Route as SearchRouteImport } from './routes/search'
 import { Route as OrdersRouteImport } from './routes/orders'
 import { Route as CheckoutRouteImport } from './routes/checkout'
 import { Route as CartRouteImport } from './routes/cart'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as SellerIndexRouteImport } from './routes/seller.index'
 import { Route as ShopShopIdRouteImport } from './routes/shop.$shopId'
+import { Route as SellerSettingsRouteImport } from './routes/seller.settings'
+import { Route as SellerProductsRouteImport } from './routes/seller.products'
+import { Route as SellerOrdersRouteImport } from './routes/seller.orders'
 import { Route as OrderOrderIdRouteImport } from './routes/order.$orderId'
 
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   id: '/sitemap.xml',
   path: '/sitemap.xml',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SellerRoute = SellerRouteImport.update({
+  id: '/seller',
+  path: '/seller',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SellRoute = SellRouteImport.update({
@@ -54,10 +64,30 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SellerIndexRoute = SellerIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => SellerRoute,
+} as any)
 const ShopShopIdRoute = ShopShopIdRouteImport.update({
   id: '/shop/$shopId',
   path: '/shop/$shopId',
   getParentRoute: () => rootRouteImport,
+} as any)
+const SellerSettingsRoute = SellerSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => SellerRoute,
+} as any)
+const SellerProductsRoute = SellerProductsRouteImport.update({
+  id: '/products',
+  path: '/products',
+  getParentRoute: () => SellerRoute,
+} as any)
+const SellerOrdersRoute = SellerOrdersRouteImport.update({
+  id: '/orders',
+  path: '/orders',
+  getParentRoute: () => SellerRoute,
 } as any)
 const OrderOrderIdRoute = OrderOrderIdRouteImport.update({
   id: '/order/$orderId',
@@ -72,9 +102,14 @@ export interface FileRoutesByFullPath {
   '/orders': typeof OrdersRoute
   '/search': typeof SearchRoute
   '/sell': typeof SellRoute
+  '/seller': typeof SellerRouteWithChildren
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/order/$orderId': typeof OrderOrderIdRoute
+  '/seller/orders': typeof SellerOrdersRoute
+  '/seller/products': typeof SellerProductsRoute
+  '/seller/settings': typeof SellerSettingsRoute
   '/shop/$shopId': typeof ShopShopIdRoute
+  '/seller/': typeof SellerIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -85,7 +120,11 @@ export interface FileRoutesByTo {
   '/sell': typeof SellRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/order/$orderId': typeof OrderOrderIdRoute
+  '/seller/orders': typeof SellerOrdersRoute
+  '/seller/products': typeof SellerProductsRoute
+  '/seller/settings': typeof SellerSettingsRoute
   '/shop/$shopId': typeof ShopShopIdRoute
+  '/seller': typeof SellerIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -95,9 +134,14 @@ export interface FileRoutesById {
   '/orders': typeof OrdersRoute
   '/search': typeof SearchRoute
   '/sell': typeof SellRoute
+  '/seller': typeof SellerRouteWithChildren
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/order/$orderId': typeof OrderOrderIdRoute
+  '/seller/orders': typeof SellerOrdersRoute
+  '/seller/products': typeof SellerProductsRoute
+  '/seller/settings': typeof SellerSettingsRoute
   '/shop/$shopId': typeof ShopShopIdRoute
+  '/seller/': typeof SellerIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -108,9 +152,14 @@ export interface FileRouteTypes {
     | '/orders'
     | '/search'
     | '/sell'
+    | '/seller'
     | '/sitemap.xml'
     | '/order/$orderId'
+    | '/seller/orders'
+    | '/seller/products'
+    | '/seller/settings'
     | '/shop/$shopId'
+    | '/seller/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -121,7 +170,11 @@ export interface FileRouteTypes {
     | '/sell'
     | '/sitemap.xml'
     | '/order/$orderId'
+    | '/seller/orders'
+    | '/seller/products'
+    | '/seller/settings'
     | '/shop/$shopId'
+    | '/seller'
   id:
     | '__root__'
     | '/'
@@ -130,9 +183,14 @@ export interface FileRouteTypes {
     | '/orders'
     | '/search'
     | '/sell'
+    | '/seller'
     | '/sitemap.xml'
     | '/order/$orderId'
+    | '/seller/orders'
+    | '/seller/products'
+    | '/seller/settings'
     | '/shop/$shopId'
+    | '/seller/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -142,6 +200,7 @@ export interface RootRouteChildren {
   OrdersRoute: typeof OrdersRoute
   SearchRoute: typeof SearchRoute
   SellRoute: typeof SellRoute
+  SellerRoute: typeof SellerRouteWithChildren
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   OrderOrderIdRoute: typeof OrderOrderIdRoute
   ShopShopIdRoute: typeof ShopShopIdRoute
@@ -154,6 +213,13 @@ declare module '@tanstack/react-router' {
       path: '/sitemap.xml'
       fullPath: '/sitemap.xml'
       preLoaderRoute: typeof SitemapDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/seller': {
+      id: '/seller'
+      path: '/seller'
+      fullPath: '/seller'
+      preLoaderRoute: typeof SellerRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/sell': {
@@ -198,12 +264,40 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/seller/': {
+      id: '/seller/'
+      path: '/'
+      fullPath: '/seller/'
+      preLoaderRoute: typeof SellerIndexRouteImport
+      parentRoute: typeof SellerRoute
+    }
     '/shop/$shopId': {
       id: '/shop/$shopId'
       path: '/shop/$shopId'
       fullPath: '/shop/$shopId'
       preLoaderRoute: typeof ShopShopIdRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/seller/settings': {
+      id: '/seller/settings'
+      path: '/settings'
+      fullPath: '/seller/settings'
+      preLoaderRoute: typeof SellerSettingsRouteImport
+      parentRoute: typeof SellerRoute
+    }
+    '/seller/products': {
+      id: '/seller/products'
+      path: '/products'
+      fullPath: '/seller/products'
+      preLoaderRoute: typeof SellerProductsRouteImport
+      parentRoute: typeof SellerRoute
+    }
+    '/seller/orders': {
+      id: '/seller/orders'
+      path: '/orders'
+      fullPath: '/seller/orders'
+      preLoaderRoute: typeof SellerOrdersRouteImport
+      parentRoute: typeof SellerRoute
     }
     '/order/$orderId': {
       id: '/order/$orderId'
@@ -215,6 +309,23 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface SellerRouteChildren {
+  SellerOrdersRoute: typeof SellerOrdersRoute
+  SellerProductsRoute: typeof SellerProductsRoute
+  SellerSettingsRoute: typeof SellerSettingsRoute
+  SellerIndexRoute: typeof SellerIndexRoute
+}
+
+const SellerRouteChildren: SellerRouteChildren = {
+  SellerOrdersRoute: SellerOrdersRoute,
+  SellerProductsRoute: SellerProductsRoute,
+  SellerSettingsRoute: SellerSettingsRoute,
+  SellerIndexRoute: SellerIndexRoute,
+}
+
+const SellerRouteWithChildren =
+  SellerRoute._addFileChildren(SellerRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   CartRoute: CartRoute,
@@ -222,6 +333,7 @@ const rootRouteChildren: RootRouteChildren = {
   OrdersRoute: OrdersRoute,
   SearchRoute: SearchRoute,
   SellRoute: SellRoute,
+  SellerRoute: SellerRouteWithChildren,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   OrderOrderIdRoute: OrderOrderIdRoute,
   ShopShopIdRoute: ShopShopIdRoute,
@@ -229,13 +341,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
