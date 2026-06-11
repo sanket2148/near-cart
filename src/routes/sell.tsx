@@ -70,6 +70,20 @@ function SellPage() {
           <Link to="/seller">Get started</Link>
         </Button>
       </div>
+
+      <div className="mt-5 flex items-center justify-between gap-3 rounded-2xl border border-accent/30 bg-accent/5 p-5">
+        <div>
+          <p className="flex items-center gap-2 font-bold">
+            <Bike className="h-4 w-4 text-accent" /> Deliver with NearCart
+          </p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Earn per delivery in your own neighborhood.
+          </p>
+        </div>
+        <Button asChild variant="accent" size="sm" className="shrink-0">
+          <Link to="/partner">Partner app</Link>
+        </Button>
+      </div>
     </AppShell>
   );
 }
