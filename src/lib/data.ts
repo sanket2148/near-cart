@@ -60,6 +60,8 @@ export const shops: Shop[] = [
     deliveryFee: 25,
     freeAbove: 499,
     area: "Koramangala",
+    lat: 12.9352,
+    lng: 77.6245,
   },
   {
     id: "city-pharmacy",
@@ -75,6 +77,8 @@ export const shops: Shop[] = [
     deliveryFee: 20,
     freeAbove: 299,
     area: "Indiranagar",
+    lat: 12.9719,
+    lng: 77.6412,
   },
   {
     id: "sunrise-bakery",
@@ -90,6 +94,8 @@ export const shops: Shop[] = [
     deliveryFee: 30,
     freeAbove: 399,
     area: "Koramangala",
+    lat: 12.9300,
+    lng: 77.6280,
   },
   {
     id: "fixit-hardware",
@@ -105,6 +111,8 @@ export const shops: Shop[] = [
     deliveryFee: 40,
     freeAbove: 799,
     area: "HSR Layout",
+    lat: 12.9116,
+    lng: 77.6389,
   },
   {
     id: "scholars-stationery",
@@ -120,6 +128,8 @@ export const shops: Shop[] = [
     deliveryFee: 25,
     freeAbove: 349,
     area: "BTM Layout",
+    lat: 12.9166,
+    lng: 77.6101,
   },
   {
     id: "voltline-electronics",
@@ -135,6 +145,8 @@ export const shops: Shop[] = [
     deliveryFee: 49,
     freeAbove: 999,
     area: "HSR Layout",
+    lat: 12.9100,
+    lng: 77.6450,
   },
 ];
 
