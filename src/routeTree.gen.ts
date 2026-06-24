@@ -28,6 +28,7 @@ import { Route as PartnerProfileRouteImport } from './routes/partner.profile'
 import { Route as PartnerEarningsRouteImport } from './routes/partner.earnings'
 import { Route as PartnerDeliveriesRouteImport } from './routes/partner.deliveries'
 import { Route as OrderOrderIdRouteImport } from './routes/order.$orderId'
+import { Route as SellerTrackOrderIdRouteImport } from './routes/seller.track.$orderId'
 import { Route as PartnerTrackOrderIdRouteImport } from './routes/partner.track.$orderId'
 
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
@@ -125,6 +126,11 @@ const OrderOrderIdRoute = OrderOrderIdRouteImport.update({
   path: '/order/$orderId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SellerTrackOrderIdRoute = SellerTrackOrderIdRouteImport.update({
+  id: '/track/$orderId',
+  path: '/track/$orderId',
+  getParentRoute: () => SellerRoute,
+} as any)
 const PartnerTrackOrderIdRoute = PartnerTrackOrderIdRouteImport.update({
   id: '/track/$orderId',
   path: '/track/$orderId',
@@ -152,6 +158,7 @@ export interface FileRoutesByFullPath {
   '/partner/': typeof PartnerIndexRoute
   '/seller/': typeof SellerIndexRoute
   '/partner/track/$orderId': typeof PartnerTrackOrderIdRoute
+  '/seller/track/$orderId': typeof SellerTrackOrderIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -172,6 +179,7 @@ export interface FileRoutesByTo {
   '/partner': typeof PartnerIndexRoute
   '/seller': typeof SellerIndexRoute
   '/partner/track/$orderId': typeof PartnerTrackOrderIdRoute
+  '/seller/track/$orderId': typeof SellerTrackOrderIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -195,6 +203,7 @@ export interface FileRoutesById {
   '/partner/': typeof PartnerIndexRoute
   '/seller/': typeof SellerIndexRoute
   '/partner/track/$orderId': typeof PartnerTrackOrderIdRoute
+  '/seller/track/$orderId': typeof SellerTrackOrderIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -219,6 +228,7 @@ export interface FileRouteTypes {
     | '/partner/'
     | '/seller/'
     | '/partner/track/$orderId'
+    | '/seller/track/$orderId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -239,6 +249,7 @@ export interface FileRouteTypes {
     | '/partner'
     | '/seller'
     | '/partner/track/$orderId'
+    | '/seller/track/$orderId'
   id:
     | '__root__'
     | '/'
@@ -261,6 +272,7 @@ export interface FileRouteTypes {
     | '/partner/'
     | '/seller/'
     | '/partner/track/$orderId'
+    | '/seller/track/$orderId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -412,6 +424,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OrderOrderIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/seller/track/$orderId': {
+      id: '/seller/track/$orderId'
+      path: '/track/$orderId'
+      fullPath: '/seller/track/$orderId'
+      preLoaderRoute: typeof SellerTrackOrderIdRouteImport
+      parentRoute: typeof SellerRoute
+    }
     '/partner/track/$orderId': {
       id: '/partner/track/$orderId'
       path: '/track/$orderId'
@@ -446,6 +465,7 @@ interface SellerRouteChildren {
   SellerProductsRoute: typeof SellerProductsRoute
   SellerSettingsRoute: typeof SellerSettingsRoute
   SellerIndexRoute: typeof SellerIndexRoute
+  SellerTrackOrderIdRoute: typeof SellerTrackOrderIdRoute
 }
 
 const SellerRouteChildren: SellerRouteChildren = {
@@ -453,6 +473,7 @@ const SellerRouteChildren: SellerRouteChildren = {
   SellerProductsRoute: SellerProductsRoute,
   SellerSettingsRoute: SellerSettingsRoute,
   SellerIndexRoute: SellerIndexRoute,
+  SellerTrackOrderIdRoute: SellerTrackOrderIdRoute,
 }
 
 const SellerRouteWithChildren =
