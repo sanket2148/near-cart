@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
 import {
@@ -10,6 +10,7 @@ import {
   Store,
   ArrowRight,
   Banknote,
+  Navigation2,
 } from "lucide-react";
 import {
   usePartner,
@@ -221,9 +222,20 @@ function JobCard({ job }: { job: DeliveryJob }) {
               </Button>
             </div>
           ) : isActive && next ? (
-            <Button variant="hero" className="w-full" onClick={handleAdvance}>
-              {JOB_ACTION_LABEL[job.status]} <ArrowRight className="h-4 w-4" />
-            </Button>
+            <div className="space-y-2">
+              <Link
+                to="/partner/track/$orderId"
+                params={{ orderId: job.orderId }}
+                className="block"
+              >
+                <Button variant="outline" className="w-full">
+                  <Navigation2 className="h-4 w-4" /> Live navigation & map
+                </Button>
+              </Link>
+              <Button variant="hero" className="w-full" onClick={handleAdvance}>
+                {JOB_ACTION_LABEL[job.status]} <ArrowRight className="h-4 w-4" />
+              </Button>
+            </div>
           ) : (
             <p className="text-center text-sm font-semibold text-muted-foreground">
               {job.status === "delivered" ? "✓ Completed" : "Declined"}

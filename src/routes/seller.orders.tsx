@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
 import {
@@ -9,6 +9,7 @@ import {
   MapPin,
   Bike,
   ArrowRight,
+  Navigation2,
 } from "lucide-react";
 import {
   useSeller,
@@ -217,6 +218,20 @@ function OrderCard({ order }: { order: SellerOrder }) {
               )}
             </div>
           )}
+
+          {/* Live tracking */}
+          {["ready", "out_for_delivery", "delivered"].includes(order.status) && (
+            <Link
+              to="/seller/track/$orderId"
+              params={{ orderId: order.id }}
+              className="block"
+            >
+              <Button variant="outline" className="w-full">
+                <Navigation2 className="h-4 w-4" /> Track delivery on map
+              </Button>
+            </Link>
+          )}
+
 
           {/* Actions */}
           {order.status === "new" ? (
