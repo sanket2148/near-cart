@@ -219,6 +219,20 @@ function OrderCard({ order }: { order: SellerOrder }) {
             </div>
           )}
 
+          {/* Live tracking */}
+          {["ready", "out_for_delivery", "delivered"].includes(order.status) && (
+            <Link
+              to="/seller/track/$orderId"
+              params={{ orderId: order.id }}
+              className="block"
+            >
+              <Button variant="outline" className="w-full">
+                <Navigation2 className="h-4 w-4" /> Track delivery on map
+              </Button>
+            </Link>
+          )}
+
+
           {/* Actions */}
           {order.status === "new" ? (
             <div className="grid grid-cols-2 gap-2">
