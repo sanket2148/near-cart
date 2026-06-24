@@ -1,18 +1,16 @@
 // Singleton loader for the Google Maps JavaScript API (browser key).
 // Uses the Lovable managed Google Maps connector browser key + tracking channel.
 
-let loader: Promise<typeof globalThis.google> | null = null;
+// We avoid pulling in @types/google.maps; the maps namespace is treated as any.
+type GoogleMaps = { maps: any };
 
-declare global {
-  // eslint-disable-next-line no-var
-  var google: typeof globalThis.google;
-}
+let loader: Promise<GoogleMaps> | null = null;
 
-export function loadGoogleMaps(): Promise<typeof globalThis.google> {
+export function loadGoogleMaps(): Promise<GoogleMaps> {
   if (typeof window === "undefined") {
     return Promise.reject(new Error("Google Maps can only load in the browser"));
   }
-  const w = window as unknown as { google?: typeof globalThis.google };
+  const w = window as unknown as { google?: GoogleMaps };
   if (w.google?.maps) return Promise.resolve(w.google);
   if (loader) return loader;
 
@@ -26,7 +24,7 @@ export function loadGoogleMaps(): Promise<typeof globalThis.google> {
   loader = new Promise((resolve, reject) => {
     const cbName = "__nearcartInitMaps";
     (window as unknown as Record<string, unknown>)[cbName] = () => {
-      resolve((window as unknown as { google: typeof globalThis.google }).google);
+      resolve((window as unknown as { google: GoogleMaps }).google);
     };
     const script = document.createElement("script");
     const params = new URLSearchParams({
