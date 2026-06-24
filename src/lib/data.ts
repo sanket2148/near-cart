@@ -32,6 +32,8 @@ export type Shop = {
   deliveryFee: number;
   freeAbove: number;
   area: string;
+  lat: number;
+  lng: number;
 };
 
 export const categories: Category[] = [
