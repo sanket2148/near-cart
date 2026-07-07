@@ -2,7 +2,7 @@
 // Renders pickup, drop and rider markers, draws the road route (Directions API
 // via the JS SDK), fits bounds, and updates the rider marker as it moves.
 import { useEffect, useRef, useState } from "react";
-import { loadGoogleMaps } from "@/lib/maps";
+import { loadGoogleMaps, onMapsAuthFailure } from "@/lib/maps";
 import { Loader2, MapPinned } from "lucide-react";
 import type { LatLng } from "@/lib/geo";
 
@@ -40,6 +40,9 @@ export function DeliveryMap({
   // Init map + base markers once.
   useEffect(() => {
     let cancelled = false;
+    const unsubscribe = onMapsAuthFailure(() => {
+      if (!cancelled) setStatus("error");
+    });
     loadGoogleMaps()
       .then((google) => {
         if (cancelled || !divRef.current) return;
@@ -109,6 +112,7 @@ export function DeliveryMap({
       });
     return () => {
       cancelled = true;
+      unsubscribe();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

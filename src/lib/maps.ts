@@ -6,6 +6,24 @@ type GoogleMaps = { maps: any };
 
 let loader: Promise<GoogleMaps> | null = null;
 
+// Google Maps invokes window.gm_authFailure when the API key / referrer is
+// rejected (e.g. RefererNotAllowedMapError). This happens AFTER the script
+// loads, so the loader promise still resolves and Google renders its own gray
+// error card into the map div. We surface it to subscribers so components can
+// show a clean, on-brand fallback instead.
+const authFailureListeners = new Set<() => void>();
+
+export function onMapsAuthFailure(cb: () => void): () => void {
+  authFailureListeners.add(cb);
+  return () => authFailureListeners.delete(cb);
+}
+
+if (typeof window !== "undefined") {
+  (window as unknown as Record<string, unknown>).gm_authFailure = () => {
+    authFailureListeners.forEach((cb) => cb());
+  };
+}
+
 export function loadGoogleMaps(): Promise<GoogleMaps> {
   if (typeof window === "undefined") {
     return Promise.reject(new Error("Google Maps can only load in the browser"));
