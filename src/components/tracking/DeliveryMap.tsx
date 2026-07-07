@@ -40,6 +40,9 @@ export function DeliveryMap({
   // Init map + base markers once.
   useEffect(() => {
     let cancelled = false;
+    const unsubscribe = onMapsAuthFailure(() => {
+      if (!cancelled) setStatus("error");
+    });
     loadGoogleMaps()
       .then((google) => {
         if (cancelled || !divRef.current) return;
