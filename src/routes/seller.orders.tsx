@@ -29,6 +29,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { VerificationLockGate } from "@/components/seller/VerificationLockGate";
 
 export const Route = createFileRoute("/seller/orders")({
   component: SellerOrders,
@@ -72,39 +73,41 @@ function SellerOrders() {
   ];
 
   return (
-    <div className="space-y-4">
-      <h1 className="text-xl font-extrabold">Orders</h1>
+    <VerificationLockGate>
+      <div className="space-y-4">
+        <h1 className="text-xl font-extrabold">Orders</h1>
 
-      <div className="flex gap-2">
-        {tabs.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => setFilter(t.id)}
-            className={cn(
-              "flex-1 rounded-xl border px-3 py-2 text-sm font-semibold transition-colors",
-              filter === t.id
-                ? "border-primary bg-primary/10 text-primary"
-                : "border-border bg-card text-muted-foreground",
-            )}
-          >
-            {t.label}
-            {t.count > 0 && <span className="ml-1 text-xs">({t.count})</span>}
-          </button>
-        ))}
-      </div>
-
-      {filtered.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center">
-          <p className="text-sm text-muted-foreground">No orders here.</p>
-        </div>
-      ) : (
-        <ul className="space-y-3">
-          {filtered.map((o) => (
-            <OrderCard key={o.id} order={o} />
+        <div className="flex gap-2">
+          {tabs.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setFilter(t.id)}
+              className={cn(
+                "flex-1 rounded-xl border px-3 py-2 text-sm font-semibold transition-colors",
+                filter === t.id
+                  ? "border-primary bg-primary/10 text-primary"
+                  : "border-border bg-card text-muted-foreground",
+              )}
+            >
+              {t.label}
+              {t.count > 0 && <span className="ml-1 text-xs">({t.count})</span>}
+            </button>
           ))}
-        </ul>
-      )}
-    </div>
+        </div>
+
+        {filtered.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center">
+            <p className="text-sm text-muted-foreground">No orders here.</p>
+          </div>
+        ) : (
+          <ul className="space-y-3">
+            {filtered.map((o) => (
+              <OrderCard key={o.id} order={o} />
+            ))}
+          </ul>
+        )}
+      </div>
+    </VerificationLockGate>
   );
 }
 

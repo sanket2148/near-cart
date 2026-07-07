@@ -28,7 +28,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   // hydrate from localStorage (client only)
   useEffect(() => {
     try {
-      const raw = typeof window !== "undefined" ? localStorage.getItem(STORAGE_KEY) : null;
+      const raw = (typeof window !== "undefined" && typeof localStorage !== "undefined") ? localStorage.getItem(STORAGE_KEY) : null;
       if (raw) {
         const parsed = JSON.parse(raw) as { shopId: string | null; lines: CartLine[] };
         setShopId(parsed.shopId ?? null);
@@ -41,7 +41,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     try {
-      if (typeof window !== "undefined") {
+      if (typeof window !== "undefined" && typeof localStorage !== "undefined") {
         localStorage.setItem(STORAGE_KEY, JSON.stringify({ shopId, lines }));
       }
     } catch {

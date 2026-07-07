@@ -21,13 +21,16 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as SellerIndexRouteImport } from './routes/seller.index'
 import { Route as PartnerIndexRouteImport } from './routes/partner.index'
 import { Route as ShopShopIdRouteImport } from './routes/shop.$shopId'
+import { Route as SellerVerificationRouteImport } from './routes/seller.verification'
 import { Route as SellerSettingsRouteImport } from './routes/seller.settings'
 import { Route as SellerProductsRouteImport } from './routes/seller.products'
 import { Route as SellerOrdersRouteImport } from './routes/seller.orders'
+import { Route as SellerOnboardingRouteImport } from './routes/seller.onboarding'
 import { Route as PartnerProfileRouteImport } from './routes/partner.profile'
 import { Route as PartnerEarningsRouteImport } from './routes/partner.earnings'
 import { Route as PartnerDeliveriesRouteImport } from './routes/partner.deliveries'
 import { Route as OrderOrderIdRouteImport } from './routes/order.$orderId'
+import { Route as AdminVerificationRouteImport } from './routes/admin.verification'
 import { Route as SellerTrackOrderIdRouteImport } from './routes/seller.track.$orderId'
 import { Route as PartnerTrackOrderIdRouteImport } from './routes/partner.track.$orderId'
 
@@ -91,6 +94,11 @@ const ShopShopIdRoute = ShopShopIdRouteImport.update({
   path: '/shop/$shopId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SellerVerificationRoute = SellerVerificationRouteImport.update({
+  id: '/verification',
+  path: '/verification',
+  getParentRoute: () => SellerRoute,
+} as any)
 const SellerSettingsRoute = SellerSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
@@ -104,6 +112,11 @@ const SellerProductsRoute = SellerProductsRouteImport.update({
 const SellerOrdersRoute = SellerOrdersRouteImport.update({
   id: '/orders',
   path: '/orders',
+  getParentRoute: () => SellerRoute,
+} as any)
+const SellerOnboardingRoute = SellerOnboardingRouteImport.update({
+  id: '/onboarding',
+  path: '/onboarding',
   getParentRoute: () => SellerRoute,
 } as any)
 const PartnerProfileRoute = PartnerProfileRouteImport.update({
@@ -124,6 +137,11 @@ const PartnerDeliveriesRoute = PartnerDeliveriesRouteImport.update({
 const OrderOrderIdRoute = OrderOrderIdRouteImport.update({
   id: '/order/$orderId',
   path: '/order/$orderId',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminVerificationRoute = AdminVerificationRouteImport.update({
+  id: '/admin/verification',
+  path: '/admin/verification',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SellerTrackOrderIdRoute = SellerTrackOrderIdRouteImport.update({
@@ -147,13 +165,16 @@ export interface FileRoutesByFullPath {
   '/sell': typeof SellRoute
   '/seller': typeof SellerRouteWithChildren
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/admin/verification': typeof AdminVerificationRoute
   '/order/$orderId': typeof OrderOrderIdRoute
   '/partner/deliveries': typeof PartnerDeliveriesRoute
   '/partner/earnings': typeof PartnerEarningsRoute
   '/partner/profile': typeof PartnerProfileRoute
+  '/seller/onboarding': typeof SellerOnboardingRoute
   '/seller/orders': typeof SellerOrdersRoute
   '/seller/products': typeof SellerProductsRoute
   '/seller/settings': typeof SellerSettingsRoute
+  '/seller/verification': typeof SellerVerificationRoute
   '/shop/$shopId': typeof ShopShopIdRoute
   '/partner/': typeof PartnerIndexRoute
   '/seller/': typeof SellerIndexRoute
@@ -168,13 +189,16 @@ export interface FileRoutesByTo {
   '/search': typeof SearchRoute
   '/sell': typeof SellRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/admin/verification': typeof AdminVerificationRoute
   '/order/$orderId': typeof OrderOrderIdRoute
   '/partner/deliveries': typeof PartnerDeliveriesRoute
   '/partner/earnings': typeof PartnerEarningsRoute
   '/partner/profile': typeof PartnerProfileRoute
+  '/seller/onboarding': typeof SellerOnboardingRoute
   '/seller/orders': typeof SellerOrdersRoute
   '/seller/products': typeof SellerProductsRoute
   '/seller/settings': typeof SellerSettingsRoute
+  '/seller/verification': typeof SellerVerificationRoute
   '/shop/$shopId': typeof ShopShopIdRoute
   '/partner': typeof PartnerIndexRoute
   '/seller': typeof SellerIndexRoute
@@ -192,13 +216,16 @@ export interface FileRoutesById {
   '/sell': typeof SellRoute
   '/seller': typeof SellerRouteWithChildren
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/admin/verification': typeof AdminVerificationRoute
   '/order/$orderId': typeof OrderOrderIdRoute
   '/partner/deliveries': typeof PartnerDeliveriesRoute
   '/partner/earnings': typeof PartnerEarningsRoute
   '/partner/profile': typeof PartnerProfileRoute
+  '/seller/onboarding': typeof SellerOnboardingRoute
   '/seller/orders': typeof SellerOrdersRoute
   '/seller/products': typeof SellerProductsRoute
   '/seller/settings': typeof SellerSettingsRoute
+  '/seller/verification': typeof SellerVerificationRoute
   '/shop/$shopId': typeof ShopShopIdRoute
   '/partner/': typeof PartnerIndexRoute
   '/seller/': typeof SellerIndexRoute
@@ -217,13 +244,16 @@ export interface FileRouteTypes {
     | '/sell'
     | '/seller'
     | '/sitemap.xml'
+    | '/admin/verification'
     | '/order/$orderId'
     | '/partner/deliveries'
     | '/partner/earnings'
     | '/partner/profile'
+    | '/seller/onboarding'
     | '/seller/orders'
     | '/seller/products'
     | '/seller/settings'
+    | '/seller/verification'
     | '/shop/$shopId'
     | '/partner/'
     | '/seller/'
@@ -238,13 +268,16 @@ export interface FileRouteTypes {
     | '/search'
     | '/sell'
     | '/sitemap.xml'
+    | '/admin/verification'
     | '/order/$orderId'
     | '/partner/deliveries'
     | '/partner/earnings'
     | '/partner/profile'
+    | '/seller/onboarding'
     | '/seller/orders'
     | '/seller/products'
     | '/seller/settings'
+    | '/seller/verification'
     | '/shop/$shopId'
     | '/partner'
     | '/seller'
@@ -261,13 +294,16 @@ export interface FileRouteTypes {
     | '/sell'
     | '/seller'
     | '/sitemap.xml'
+    | '/admin/verification'
     | '/order/$orderId'
     | '/partner/deliveries'
     | '/partner/earnings'
     | '/partner/profile'
+    | '/seller/onboarding'
     | '/seller/orders'
     | '/seller/products'
     | '/seller/settings'
+    | '/seller/verification'
     | '/shop/$shopId'
     | '/partner/'
     | '/seller/'
@@ -285,6 +321,7 @@ export interface RootRouteChildren {
   SellRoute: typeof SellRoute
   SellerRoute: typeof SellerRouteWithChildren
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
+  AdminVerificationRoute: typeof AdminVerificationRoute
   OrderOrderIdRoute: typeof OrderOrderIdRoute
   ShopShopIdRoute: typeof ShopShopIdRoute
 }
@@ -375,6 +412,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ShopShopIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/seller/verification': {
+      id: '/seller/verification'
+      path: '/verification'
+      fullPath: '/seller/verification'
+      preLoaderRoute: typeof SellerVerificationRouteImport
+      parentRoute: typeof SellerRoute
+    }
     '/seller/settings': {
       id: '/seller/settings'
       path: '/settings'
@@ -394,6 +438,13 @@ declare module '@tanstack/react-router' {
       path: '/orders'
       fullPath: '/seller/orders'
       preLoaderRoute: typeof SellerOrdersRouteImport
+      parentRoute: typeof SellerRoute
+    }
+    '/seller/onboarding': {
+      id: '/seller/onboarding'
+      path: '/onboarding'
+      fullPath: '/seller/onboarding'
+      preLoaderRoute: typeof SellerOnboardingRouteImport
       parentRoute: typeof SellerRoute
     }
     '/partner/profile': {
@@ -422,6 +473,13 @@ declare module '@tanstack/react-router' {
       path: '/order/$orderId'
       fullPath: '/order/$orderId'
       preLoaderRoute: typeof OrderOrderIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/verification': {
+      id: '/admin/verification'
+      path: '/admin/verification'
+      fullPath: '/admin/verification'
+      preLoaderRoute: typeof AdminVerificationRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/seller/track/$orderId': {
@@ -461,17 +519,21 @@ const PartnerRouteWithChildren =
   PartnerRoute._addFileChildren(PartnerRouteChildren)
 
 interface SellerRouteChildren {
+  SellerOnboardingRoute: typeof SellerOnboardingRoute
   SellerOrdersRoute: typeof SellerOrdersRoute
   SellerProductsRoute: typeof SellerProductsRoute
   SellerSettingsRoute: typeof SellerSettingsRoute
+  SellerVerificationRoute: typeof SellerVerificationRoute
   SellerIndexRoute: typeof SellerIndexRoute
   SellerTrackOrderIdRoute: typeof SellerTrackOrderIdRoute
 }
 
 const SellerRouteChildren: SellerRouteChildren = {
+  SellerOnboardingRoute: SellerOnboardingRoute,
   SellerOrdersRoute: SellerOrdersRoute,
   SellerProductsRoute: SellerProductsRoute,
   SellerSettingsRoute: SellerSettingsRoute,
+  SellerVerificationRoute: SellerVerificationRoute,
   SellerIndexRoute: SellerIndexRoute,
   SellerTrackOrderIdRoute: SellerTrackOrderIdRoute,
 }
@@ -489,9 +551,20 @@ const rootRouteChildren: RootRouteChildren = {
   SellRoute: SellRoute,
   SellerRoute: SellerRouteWithChildren,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
+  AdminVerificationRoute: AdminVerificationRoute,
   OrderOrderIdRoute: OrderOrderIdRoute,
   ShopShopIdRoute: ShopShopIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

@@ -17,6 +17,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { VerificationLockGate } from "@/components/seller/VerificationLockGate";
 
 export const Route = createFileRoute("/seller/products")({
   component: SellerProducts,
@@ -31,83 +32,85 @@ function SellerProducts() {
   );
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-extrabold">Products</h1>
-        <ProductDialog
-          trigger={
-            <Button variant="hero" size="sm">
-              <Plus className="h-4 w-4" /> Add
-            </Button>
-          }
-        />
-      </div>
-
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search your products"
-          className="pl-9"
-        />
-      </div>
-
-      {filtered.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground">
-          No products found.
+    <VerificationLockGate>
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h1 className="text-xl font-extrabold">Products</h1>
+          <ProductDialog
+            trigger={
+              <Button variant="hero" size="sm">
+                <Plus className="h-4 w-4" /> Add
+              </Button>
+            }
+          />
         </div>
-      ) : (
-        <ul className="space-y-2">
-          {filtered.map((p) => (
-            <li
-              key={p.id}
-              className="flex items-center gap-3 rounded-2xl border border-border bg-card p-3 shadow-card"
-            >
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-muted text-xl">
-                {p.emoji}
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-bold">{p.name}</p>
-                <p className="text-xs text-muted-foreground">
-                  {formatINR(p.price)} · {p.unit} · {p.category}
-                </p>
-                <span
-                  className={cn(
-                    "mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-bold",
-                    p.inStock ? "bg-primary/10 text-primary" : "bg-destructive/10 text-destructive",
-                  )}
-                >
-                  {p.inStock ? "In stock" : "Out of stock"}
+
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search your products"
+            className="pl-9"
+          />
+        </div>
+
+        {filtered.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground">
+            No products found.
+          </div>
+        ) : (
+          <ul className="space-y-2">
+            {filtered.map((p) => (
+              <li
+                key={p.id}
+                className="flex items-center gap-3 rounded-2xl border border-border bg-card p-3 shadow-card"
+              >
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-muted text-xl">
+                  {p.emoji}
                 </span>
-              </div>
-              <div className="flex flex-col items-end gap-2">
-                <Switch checked={p.inStock} onCheckedChange={() => toggleStock(p.id)} />
-                <div className="flex gap-1">
-                  <ProductDialog
-                    product={p}
-                    trigger={
-                      <button className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted">
-                        <Pencil className="h-4 w-4" />
-                      </button>
-                    }
-                  />
-                  <button
-                    onClick={() => {
-                      removeProduct(p.id);
-                      toast("Product removed");
-                    }}
-                    className="rounded-lg p-1.5 text-destructive hover:bg-destructive/10"
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-bold">{p.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {formatINR(p.price)} · {p.unit} · {p.category}
+                  </p>
+                  <span
+                    className={cn(
+                      "mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-bold",
+                      p.inStock ? "bg-primary/10 text-primary" : "bg-destructive/10 text-destructive",
+                    )}
                   >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                    {p.inStock ? "In stock" : "Out of stock"}
+                  </span>
                 </div>
-              </div>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
+                <div className="flex flex-col items-end gap-2">
+                  <Switch checked={p.inStock} onCheckedChange={() => toggleStock(p.id)} />
+                  <div className="flex gap-1">
+                    <ProductDialog
+                      product={p}
+                      trigger={
+                        <button className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted">
+                          <Pencil className="h-4 w-4" />
+                        </button>
+                      }
+                    />
+                    <button
+                      onClick={() => {
+                        removeProduct(p.id);
+                        toast("Product removed");
+                      }}
+                      className="rounded-lg p-1.5 text-destructive hover:bg-destructive/10"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </VerificationLockGate>
   );
 }
 

@@ -11,13 +11,14 @@ import {
 import { useSeller, STATUS_LABEL, timeAgo } from "@/lib/seller";
 import { formatINR } from "@/lib/data";
 import { Button } from "@/components/ui/button";
+import { VerificationStatusCard } from "@/components/seller/VerificationStatusCard";
 
 export const Route = createFileRoute("/seller/")({
   component: SellerDashboard,
 });
 
 function SellerDashboard() {
-  const { shop, stats, orders, products } = useSeller();
+  const { shop, stats, orders, products, verification } = useSeller();
   const newOrders = orders.filter((o) => o.status === "new").slice(0, 3);
   const activeDeliveries = orders.filter(
     (o) => o.status === "out_for_delivery" || o.status === "ready",
@@ -62,6 +63,9 @@ function SellerDashboard() {
           <p className="text-sm text-muted-foreground">Here's what's happening today.</p>
         </div>
       </div>
+
+      {/* Verification progress card */}
+      <VerificationStatusCard verification={verification} />
 
       {/* Stat tiles */}
       <div className="grid grid-cols-2 gap-3">

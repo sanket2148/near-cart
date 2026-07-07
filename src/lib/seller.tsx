@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { products as seedProducts, shops as seedShops, type Product } from "./data";
+import { type BusinessType, type BadgeTier, type ShopVerification, loadVerification, saveVerification, createEmptyVerification } from "./verification";
 
 export type SellerOrderStatus =
   | "new"
@@ -59,6 +60,9 @@ export type ShopProfile = {
   deliveryFee: number;
   freeAbove: number;
   etaMinutes: number;
+  businessType: BusinessType | null;
+  badgeTier: BadgeTier;
+  verificationStatus: 'incomplete' | 'pending_review' | 'approved' | 'suspended';
 };
 
 // ---- Seed (the owner's own shop) ----
@@ -76,6 +80,9 @@ function seedShopProfile(): ShopProfile {
     deliveryFee: s.deliveryFee,
     freeAbove: s.freeAbove,
     etaMinutes: s.etaMinutes,
+    businessType: "grocery",
+    badgeTier: "none",
+    verificationStatus: "incomplete",
   };
 }
 
@@ -235,6 +242,8 @@ type SellerContextValue = {
   products: Product[];
   orders: SellerOrder[];
   partners: DeliveryPartner[];
+  verification: ShopVerification;
+  updateVerification: (v: ShopVerification) => void;
   updateShop: (patch: Partial<ShopProfile>) => void;
   addProduct: (p: Omit<Product, "id" | "shopId">) => void;
   updateProduct: (id: string, patch: Partial<Product>) => void;
@@ -260,6 +269,7 @@ export function SellerProvider({ children }: { children: ReactNode }) {
   const [products, setProducts] = useState<Product[]>(seedShopProducts);
   const [orders, setOrders] = useState<SellerOrder[]>(seedOrders);
   const [partners] = useState<DeliveryPartner[]>(seedPartners);
+  const [verification, setVerification] = useState<ShopVerification>(() => createEmptyVerification(OWNED_SHOP_ID));
   const [hydrated, setHydrated] = useState(false);
 
   // Hydrate from localStorage after mount (avoids SSR mismatch).
@@ -267,6 +277,7 @@ export function SellerProvider({ children }: { children: ReactNode }) {
     setShop(load(KEYS.shop, seedShopProfile()));
     setProducts(load(KEYS.products, seedShopProducts()));
     setOrders(load(KEYS.orders, seedOrders()));
+    setVerification(loadVerification(OWNED_SHOP_ID));
     setHydrated(true);
   }, []);
 
@@ -279,6 +290,16 @@ export function SellerProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (hydrated) save(KEYS.orders, orders);
   }, [orders, hydrated]);
+  useEffect(() => {
+    if (hydrated) saveVerification(verification);
+  }, [verification, hydrated]);
+
+  // Force shop to remain closed if it is not fully verified/approved
+  useEffect(() => {
+    if (hydrated && verification.overallStatus !== "approved" && shop.isOpen) {
+      setShop((s) => ({ ...s, isOpen: false }));
+    }
+  }, [verification.overallStatus, hydrated, shop.isOpen]);
 
   const value = useMemo<SellerContextValue>(() => {
     const updateOrder = (id: string, patch: Partial<SellerOrder>) =>
@@ -302,6 +323,17 @@ export function SellerProvider({ children }: { children: ReactNode }) {
       products,
       orders,
       partners,
+      verification,
+      updateVerification: (v) => {
+        setVerification(v);
+        setShop((s) => ({
+          ...s,
+          businessType: v.businessType,
+          badgeTier: v.currentBadge,
+          verificationStatus: v.overallStatus,
+          isOpen: v.overallStatus === "approved" ? s.isOpen : false,
+        }));
+      },
       updateShop: (patch) => setShop((s) => ({ ...s, ...patch })),
       addProduct: (p) =>
         setProducts((prev) => [
@@ -328,7 +360,7 @@ export function SellerProvider({ children }: { children: ReactNode }) {
       assignPartner: (orderId, partnerId) => updateOrder(orderId, { partnerId }),
       stats,
     };
-  }, [shop, products, orders, partners]);
+  }, [shop, products, orders, partners, verification]);
 
   return <SellerContext.Provider value={value}>{children}</SellerContext.Provider>;
 }

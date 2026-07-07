@@ -4,6 +4,8 @@ import type { Shop } from "@/lib/data";
 import { formatINR } from "@/lib/data";
 import { cn } from "@/lib/utils";
 
+import { VerificationBadge } from "@/components/VerificationBadge";
+
 export function ShopCard({ shop }: { shop: Shop }) {
   return (
     <Link
@@ -20,7 +22,10 @@ export function ShopCard({ shop }: { shop: Shop }) {
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-2">
-            <h3 className="truncate font-bold leading-tight">{shop.name}</h3>
+            <div className="flex items-center gap-1.5 min-w-0">
+              <h3 className="truncate font-bold leading-tight">{shop.name}</h3>
+              {shop.badgeTier && <VerificationBadge tier={shop.badgeTier} size="sm" showLabel={false} />}
+            </div>
             <span className="flex shrink-0 items-center gap-1 rounded-md bg-success px-1.5 py-0.5 text-xs font-bold text-success-foreground">
               <Star className="h-3 w-3 fill-current" /> {shop.rating}
             </span>
