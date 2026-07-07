@@ -1,12 +1,22 @@
 import { Link } from "@tanstack/react-router";
-import { MapPin, ChevronDown, ShoppingBag } from "lucide-react";
+import { MapPin, ChevronDown, ShoppingBag, Menu } from "lucide-react";
 import { useCart } from "@/lib/cart";
 
-export function AppHeader({ subtitle }: { subtitle?: string }) {
+export function AppHeader({ subtitle, onMenuClick }: { subtitle?: string; onMenuClick?: () => void }) {
   const { itemCount } = useCart();
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-background/85 backdrop-blur-md">
       <div className="mx-auto flex max-w-2xl items-center justify-between gap-3 px-4 py-3">
+        {onMenuClick && (
+          <button
+            onClick={onMenuClick}
+            className="md:hidden flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border bg-card text-muted-foreground hover:bg-accent/10 cursor-pointer"
+            aria-label="Open navigation menu"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+        )}
+
         <Link to="/" className="flex items-center gap-2">
           <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-primary text-lg shadow-card">
             🛒

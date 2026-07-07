@@ -1,20 +1,22 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
-import { Store, Bike, Power, ArrowLeftRight } from "lucide-react";
+import { Store, Bike, Power, ArrowLeftRight, Shield } from "lucide-react";
 import { useSeller } from "@/lib/seller";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
+import { VerificationBadge } from "@/components/VerificationBadge";
 
 export const Route = createFileRoute("/seller/settings")({
   component: SellerSettings,
 });
 
 function SellerSettings() {
-  const { shop, updateShop, partners } = useSeller();
+  const { shop, updateShop, partners, verification } = useSeller();
+  const isApproved = verification.overallStatus === "approved";
   const [form, setForm] = useState({
     name: shop.name,
     tagline: shop.tagline,
@@ -42,6 +44,38 @@ function SellerSettings() {
     <div className="space-y-5">
       <h1 className="text-xl font-extrabold">Shop settings</h1>
 
+      {/* Verification Status */}
+      <section className="flex items-center justify-between rounded-2xl border border-border bg-card p-4 shadow-card">
+        <span className="flex items-center gap-3">
+          <span
+            className={cn(
+              "flex h-10 w-10 items-center justify-center rounded-xl",
+              shop.badgeTier && shop.badgeTier !== "none"
+                ? "bg-emerald-50 text-emerald-600 border border-emerald-100/50"
+                : "bg-muted text-muted-foreground",
+            )}
+          >
+            <Shield className="h-5 w-5" />
+          </span>
+          <span>
+            <span className="block text-sm font-bold flex items-center gap-1.5">
+              Verification status
+              {shop.badgeTier && shop.badgeTier !== "none" && (
+                <VerificationBadge tier={shop.badgeTier} size="sm" showLabel={false} />
+              )}
+            </span>
+            <span className="text-xs text-muted-foreground capitalize">
+              {shop.verificationStatus === "approved"
+                ? "Fully verified"
+                : shop.verificationStatus.replace(/_/g, " ")}
+            </span>
+          </span>
+        </span>
+        <Button asChild variant="outline" size="sm">
+          <Link to="/seller/verification">View details</Link>
+        </Button>
+      </section>
+
       {/* Open / closed */}
       <section className="flex items-center justify-between rounded-2xl border border-border bg-card p-4 shadow-card">
         <span className="flex items-center gap-3">
@@ -55,15 +89,20 @@ function SellerSettings() {
           </span>
           <span>
             <span className="block text-sm font-bold">
-              Shop is {shop.isOpen ? "open" : "closed"}
+              Shop is {shop.isOpen && isApproved ? "open" : "closed"}
             </span>
             <span className="text-xs text-muted-foreground">
-              {shop.isOpen ? "Accepting orders" : "Not accepting orders"}
+              {!isApproved
+                ? "Verification required to go live"
+                : shop.isOpen
+                  ? "Accepting orders"
+                  : "Not accepting orders"}
             </span>
           </span>
         </span>
         <Switch
-          checked={shop.isOpen}
+          checked={shop.isOpen && isApproved}
+          disabled={!isApproved}
           onCheckedChange={(v) => {
             updateShop({ isOpen: v });
             toast(v ? "Shop opened" : "Shop closed");

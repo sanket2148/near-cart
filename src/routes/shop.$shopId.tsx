@@ -7,6 +7,8 @@ import { CartBar } from "@/components/CartBar";
 import { getShop, getProductsByShop } from "@/lib/data";
 import { cn } from "@/lib/utils";
 
+import { VerificationBadge } from "@/components/VerificationBadge";
+
 export const Route = createFileRoute("/shop/$shopId")({
   head: ({ params }) => {
     const shop = getShop(params.shopId);
@@ -62,8 +64,11 @@ function ShopPage() {
           <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-background text-4xl shadow-card">
             {shop.emoji}
           </div>
-          <div className="min-w-0">
-            <h1 className="truncate text-xl font-extrabold">{shop.name}</h1>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h1 className="text-xl font-extrabold leading-tight">{shop.name}</h1>
+              {shop.badgeTier && <VerificationBadge tier={shop.badgeTier} size="sm" />}
+            </div>
             <p className="text-sm text-muted-foreground">{shop.tagline}</p>
             <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs font-medium">
               <span className="flex items-center gap-1 text-success">

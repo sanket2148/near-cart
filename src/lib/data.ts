@@ -34,6 +34,8 @@ export type Shop = {
   area: string;
   lat: number;
   lng: number;
+  businessType?: "restaurant" | "pharmacy" | "grocery" | "retail" | "salon" | "electronics" | "bakery" | "home_business";
+  badgeTier?: "none" | "basic" | "verified" | "premium" | "trusted";
 };
 
 export const categories: Category[] = [
@@ -62,6 +64,8 @@ export const shops: Shop[] = [
     area: "Koramangala",
     lat: 12.9352,
     lng: 77.6245,
+    businessType: "grocery",
+    badgeTier: "verified",
   },
   {
     id: "city-pharmacy",
@@ -79,6 +83,8 @@ export const shops: Shop[] = [
     area: "Indiranagar",
     lat: 12.9719,
     lng: 77.6412,
+    businessType: "pharmacy",
+    badgeTier: "premium",
   },
   {
     id: "sunrise-bakery",
@@ -96,6 +102,8 @@ export const shops: Shop[] = [
     area: "Koramangala",
     lat: 12.9300,
     lng: 77.6280,
+    businessType: "bakery",
+    badgeTier: "basic",
   },
   {
     id: "fixit-hardware",
@@ -113,6 +121,8 @@ export const shops: Shop[] = [
     area: "HSR Layout",
     lat: 12.9116,
     lng: 77.6389,
+    businessType: "retail",
+    badgeTier: "none",
   },
   {
     id: "scholars-stationery",
@@ -130,6 +140,8 @@ export const shops: Shop[] = [
     area: "BTM Layout",
     lat: 12.9166,
     lng: 77.6101,
+    businessType: "retail",
+    badgeTier: "none",
   },
   {
     id: "voltline-electronics",
@@ -147,6 +159,8 @@ export const shops: Shop[] = [
     area: "HSR Layout",
     lat: 12.9100,
     lng: 77.6450,
+    businessType: "electronics",
+    badgeTier: "none",
   },
 ];
 

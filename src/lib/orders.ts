@@ -20,9 +20,15 @@ export type Order = {
 
 const KEY = "nearcart-orders";
 
+// Simple global memory storage fallback for mobile devices
+const mobileMemoryStorage: Record<string, string> = {};
+
 export function getOrders(): Order[] {
   try {
-    if (typeof window === "undefined") return [];
+    if (typeof window === "undefined" || typeof localStorage === "undefined") {
+      const raw = mobileMemoryStorage[KEY];
+      return raw ? (JSON.parse(raw) as Order[]) : [];
+    }
     const raw = localStorage.getItem(KEY);
     return raw ? (JSON.parse(raw) as Order[]) : [];
   } catch {
@@ -38,7 +44,11 @@ export function saveOrder(order: Order) {
   const all = getOrders();
   all.unshift(order);
   try {
-    localStorage.setItem(KEY, JSON.stringify(all));
+    if (typeof window === "undefined" || typeof localStorage === "undefined") {
+      mobileMemoryStorage[KEY] = JSON.stringify(all);
+    } else {
+      localStorage.setItem(KEY, JSON.stringify(all));
+    }
   } catch {
     /* ignore */
   }
