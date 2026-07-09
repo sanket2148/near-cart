@@ -5,6 +5,25 @@
 //     error logger plugins, and sandbox detection (port/host/strictPort).
 // You can pass additional config via defineConfig({ vite: { ... }, etc... }) if needed.
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
+// The base config injects VITE_* vars only. Server functions need non-VITE
+// secrets (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, ...) on process.env in the
+// dev/SSR runtime. Load them from .env here without overriding anything the
+// hosting platform already provides. For the published worker, set these as
+// project secrets too.
+try {
+  const raw = readFileSync(resolve(process.cwd(), ".env"), "utf8");
+  for (const line of raw.split("\n")) {
+    const m = line.match(/^\s*([A-Za-z0-9_]+)\s*=\s*(.*)\s*$/);
+    if (m && process.env[m[1]] === undefined) {
+      process.env[m[1]] = m[2].replace(/^["']|["']$/g, "");
+    }
+  }
+} catch {
+  /* no .env file — rely on platform-provided env */
+}
 
 export default defineConfig({
   tanstackStart: {

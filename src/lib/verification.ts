@@ -37,6 +37,56 @@ export type DocumentType =
   | "vehicle_rc"
   | "pharmacist_reg";
 
+/** Final decision returned by the server-side verification pipeline. */
+export type VerificationDecision = "VERIFIED" | "UNDER_REVIEW" | "REJECTED";
+
+/** Business details extracted from a document via OCR. */
+export type ExtractedFields = {
+  businessName?: string;
+  ownerName?: string;
+  licenseNumber?: string;
+  registrationNumber?: string;
+  address?: string;
+  documentType?: string;
+  expiryDate?: string;
+};
+
+/** Registration form details a document is compared against. */
+export type VerificationForm = {
+  businessName?: string;
+  ownerName?: string;
+  address?: string;
+  businessType?: string;
+};
+
+/**
+ * Rich result produced by the merchant-verification backend for a single
+ * uploaded file (document or photo). Persisted server-side and mirrored here
+ * so the UI can render OCR results, match scores and the confidence decision.
+ */
+export type FileAnalysis = {
+  docId: string;
+  category: "document" | "photo";
+  docType: string;
+  fileName: string;
+  filePath: string;
+  sha256: string;
+  sizeBytes: number;
+  mimeType: string;
+  /** 0–1 overall confidence score. */
+  confidence: number;
+  decision: VerificationDecision;
+  qualityScore: number;
+  authenticityScore: number;
+  matchScore: number;
+  duplicate: boolean;
+  ocrText: string;
+  extractedFields: ExtractedFields;
+  matchDetails: Record<string, number>;
+  issues: string[];
+  createdAt: number;
+};
+
 export type DocumentUpload = {
   id: string;
   docType: DocumentType;
@@ -44,6 +94,8 @@ export type DocumentUpload = {
   status: LevelStatus;
   uploadedAt: number;
   rejectionReason?: string;
+  filePath?: string;
+  analysis?: FileAnalysis;
 };
 
 export type ShopPhoto = {
@@ -51,10 +103,14 @@ export type ShopPhoto = {
   type: "front" | "interior" | "board" | "selfie";
   fileName: string;
   uploadedAt: number;
+  filePath?: string;
+  analysis?: FileAnalysis;
 };
 
 export type ShopVerification = {
   shopId: string;
+  /** Stable id used to key backend verification records + uploaded files. */
+  merchantRef: string;
   businessType: BusinessType | null;
   currentBadge: BadgeTier;
   levels: {
@@ -287,10 +343,23 @@ export const VERIFICATION_STEPS: {
 // ─── Functions ───────────────────────────────────────────────────────────────
 
 /** Create a blank verification state for a new shop. */
+/** Generate a stable merchant reference id (used to key backend records). */
+export function genMerchantRef(): string {
+  try {
+    if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+      return `mr_${crypto.randomUUID()}`;
+    }
+  } catch {
+    /* fall through */
+  }
+  return `mr_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
+}
+
 export function createEmptyVerification(shopId: string): ShopVerification {
   const now = Date.now();
   return {
     shopId,
+    merchantRef: genMerchantRef(),
     businessType: null,
     currentBadge: "none",
     levels: {
@@ -471,6 +540,8 @@ export function loadVerification(shopId: string): ShopVerification {
     const parsed = JSON.parse(raw) as ShopVerification;
     // Make sure the stored data is for this shop
     if (parsed.shopId !== shopId) return createEmptyVerification(shopId);
+    // Backfill merchantRef for states saved before backend integration.
+    if (!parsed.merchantRef) parsed.merchantRef = genMerchantRef();
     return parsed;
   } catch {
     return createEmptyVerification(shopId);
