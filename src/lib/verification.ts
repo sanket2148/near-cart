@@ -347,6 +347,7 @@ export function createEmptyVerification(shopId: string): ShopVerification {
   const now = Date.now();
   return {
     shopId,
+    merchantRef: genMerchantRef(),
     businessType: null,
     currentBadge: "none",
     levels: {
