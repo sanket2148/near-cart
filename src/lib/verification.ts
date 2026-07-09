@@ -109,6 +109,8 @@ export type ShopPhoto = {
 
 export type ShopVerification = {
   shopId: string;
+  /** Stable id used to key backend verification records + uploaded files. */
+  merchantRef: string;
   businessType: BusinessType | null;
   currentBadge: BadgeTier;
   levels: {
