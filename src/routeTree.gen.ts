@@ -30,6 +30,7 @@ import { Route as PartnerProfileRouteImport } from './routes/partner.profile'
 import { Route as PartnerEarningsRouteImport } from './routes/partner.earnings'
 import { Route as PartnerDeliveriesRouteImport } from './routes/partner.deliveries'
 import { Route as OrderOrderIdRouteImport } from './routes/order.$orderId'
+import { Route as ApiMvcheckRouteImport } from './routes/api/mvcheck'
 import { Route as AdminVerificationRouteImport } from './routes/admin.verification'
 import { Route as SellerTrackOrderIdRouteImport } from './routes/seller.track.$orderId'
 import { Route as PartnerTrackOrderIdRouteImport } from './routes/partner.track.$orderId'
@@ -139,6 +140,11 @@ const OrderOrderIdRoute = OrderOrderIdRouteImport.update({
   path: '/order/$orderId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiMvcheckRoute = ApiMvcheckRouteImport.update({
+  id: '/api/mvcheck',
+  path: '/api/mvcheck',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminVerificationRoute = AdminVerificationRouteImport.update({
   id: '/admin/verification',
   path: '/admin/verification',
@@ -166,6 +172,7 @@ export interface FileRoutesByFullPath {
   '/seller': typeof SellerRouteWithChildren
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/admin/verification': typeof AdminVerificationRoute
+  '/api/mvcheck': typeof ApiMvcheckRoute
   '/order/$orderId': typeof OrderOrderIdRoute
   '/partner/deliveries': typeof PartnerDeliveriesRoute
   '/partner/earnings': typeof PartnerEarningsRoute
@@ -190,6 +197,7 @@ export interface FileRoutesByTo {
   '/sell': typeof SellRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/admin/verification': typeof AdminVerificationRoute
+  '/api/mvcheck': typeof ApiMvcheckRoute
   '/order/$orderId': typeof OrderOrderIdRoute
   '/partner/deliveries': typeof PartnerDeliveriesRoute
   '/partner/earnings': typeof PartnerEarningsRoute
@@ -217,6 +225,7 @@ export interface FileRoutesById {
   '/seller': typeof SellerRouteWithChildren
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/admin/verification': typeof AdminVerificationRoute
+  '/api/mvcheck': typeof ApiMvcheckRoute
   '/order/$orderId': typeof OrderOrderIdRoute
   '/partner/deliveries': typeof PartnerDeliveriesRoute
   '/partner/earnings': typeof PartnerEarningsRoute
@@ -245,6 +254,7 @@ export interface FileRouteTypes {
     | '/seller'
     | '/sitemap.xml'
     | '/admin/verification'
+    | '/api/mvcheck'
     | '/order/$orderId'
     | '/partner/deliveries'
     | '/partner/earnings'
@@ -269,6 +279,7 @@ export interface FileRouteTypes {
     | '/sell'
     | '/sitemap.xml'
     | '/admin/verification'
+    | '/api/mvcheck'
     | '/order/$orderId'
     | '/partner/deliveries'
     | '/partner/earnings'
@@ -295,6 +306,7 @@ export interface FileRouteTypes {
     | '/seller'
     | '/sitemap.xml'
     | '/admin/verification'
+    | '/api/mvcheck'
     | '/order/$orderId'
     | '/partner/deliveries'
     | '/partner/earnings'
@@ -322,6 +334,7 @@ export interface RootRouteChildren {
   SellerRoute: typeof SellerRouteWithChildren
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   AdminVerificationRoute: typeof AdminVerificationRoute
+  ApiMvcheckRoute: typeof ApiMvcheckRoute
   OrderOrderIdRoute: typeof OrderOrderIdRoute
   ShopShopIdRoute: typeof ShopShopIdRoute
 }
@@ -475,6 +488,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OrderOrderIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/mvcheck': {
+      id: '/api/mvcheck'
+      path: '/api/mvcheck'
+      fullPath: '/api/mvcheck'
+      preLoaderRoute: typeof ApiMvcheckRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/verification': {
       id: '/admin/verification'
       path: '/admin/verification'
@@ -552,9 +572,20 @@ const rootRouteChildren: RootRouteChildren = {
   SellerRoute: SellerRouteWithChildren,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   AdminVerificationRoute: AdminVerificationRoute,
+  ApiMvcheckRoute: ApiMvcheckRoute,
   OrderOrderIdRoute: OrderOrderIdRoute,
   ShopShopIdRoute: ShopShopIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
