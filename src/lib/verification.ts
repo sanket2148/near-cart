@@ -540,6 +540,8 @@ export function loadVerification(shopId: string): ShopVerification {
     const parsed = JSON.parse(raw) as ShopVerification;
     // Make sure the stored data is for this shop
     if (parsed.shopId !== shopId) return createEmptyVerification(shopId);
+    // Backfill merchantRef for states saved before backend integration.
+    if (!parsed.merchantRef) parsed.merchantRef = genMerchantRef();
     return parsed;
   } catch {
     return createEmptyVerification(shopId);
