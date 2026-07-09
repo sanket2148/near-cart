@@ -343,6 +343,18 @@ export const VERIFICATION_STEPS: {
 // ─── Functions ───────────────────────────────────────────────────────────────
 
 /** Create a blank verification state for a new shop. */
+/** Generate a stable merchant reference id (used to key backend records). */
+export function genMerchantRef(): string {
+  try {
+    if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+      return `mr_${crypto.randomUUID()}`;
+    }
+  } catch {
+    /* fall through */
+  }
+  return `mr_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`;
+}
+
 export function createEmptyVerification(shopId: string): ShopVerification {
   const now = Date.now();
   return {
