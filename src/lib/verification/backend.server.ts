@@ -374,8 +374,15 @@ export async function analyzeFile(input: AnalyzeInput): Promise<FileAnalysis> {
     issues.push("Business details on the document do not match your registration.");
   issues.push(...vision.quality.issues, ...vision.authenticity.concerns);
 
-  // 6. Store the file securely (private bucket)
-  const filePath = await storeFile(merchantRef, category, docId, ext, buffer, mimeType);
+  // 6. Store the file securely (private bucket). Non-fatal: if storage rejects
+  // the credentials, still return the analysis so the pipeline stays usable.
+  let filePath = "";
+  try {
+    filePath = await storeFile(merchantRef, category, docId, ext, buffer, mimeType);
+  } catch (err) {
+    issues.push("File could not be saved to secure storage — check SUPABASE_SERVICE_ROLE_KEY.");
+    await audit(merchantRef, "storage.error", { message: String(err).slice(0, 200) });
+  }
 
   const analysis: FileAnalysis = {
     docId,
