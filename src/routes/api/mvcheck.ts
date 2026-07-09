@@ -18,6 +18,25 @@ export const Route = createFileRoute("/api/mvcheck")({
           return Response.json({ ok: false, error: String(e) }, { status: 500 });
         }
       },
+      POST: async ({ request }) => {
+        try {
+          const body = (await request.json()) as { dataBase64: string; mimeType: string };
+          const be = await import("@/lib/verification/backend.server");
+          const res = await be.analyzeFile({
+            merchantRef: "mr_selftest_probe",
+            category: "document",
+            docType: "fssai",
+            fileName: "test.png",
+            mimeType: body.mimeType,
+            dataBase64: body.dataBase64,
+            form: { businessName: "Sharma Kirana Store", ownerName: "Sharma", address: "Koramangala Bengaluru" },
+          });
+          return Response.json({ ok: true, res });
+        } catch (e) {
+          return Response.json({ ok: false, error: String(e) }, { status: 500 });
+        }
+      },
     },
   },
 });
+
