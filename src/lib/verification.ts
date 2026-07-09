@@ -37,6 +37,56 @@ export type DocumentType =
   | "vehicle_rc"
   | "pharmacist_reg";
 
+/** Final decision returned by the server-side verification pipeline. */
+export type VerificationDecision = "VERIFIED" | "UNDER_REVIEW" | "REJECTED";
+
+/** Business details extracted from a document via OCR. */
+export type ExtractedFields = {
+  businessName?: string;
+  ownerName?: string;
+  licenseNumber?: string;
+  registrationNumber?: string;
+  address?: string;
+  documentType?: string;
+  expiryDate?: string;
+};
+
+/** Registration form details a document is compared against. */
+export type VerificationForm = {
+  businessName?: string;
+  ownerName?: string;
+  address?: string;
+  businessType?: string;
+};
+
+/**
+ * Rich result produced by the merchant-verification backend for a single
+ * uploaded file (document or photo). Persisted server-side and mirrored here
+ * so the UI can render OCR results, match scores and the confidence decision.
+ */
+export type FileAnalysis = {
+  docId: string;
+  category: "document" | "photo";
+  docType: string;
+  fileName: string;
+  filePath: string;
+  sha256: string;
+  sizeBytes: number;
+  mimeType: string;
+  /** 0–1 overall confidence score. */
+  confidence: number;
+  decision: VerificationDecision;
+  qualityScore: number;
+  authenticityScore: number;
+  matchScore: number;
+  duplicate: boolean;
+  ocrText: string;
+  extractedFields: ExtractedFields;
+  matchDetails: Record<string, number>;
+  issues: string[];
+  createdAt: number;
+};
+
 export type DocumentUpload = {
   id: string;
   docType: DocumentType;
@@ -44,6 +94,8 @@ export type DocumentUpload = {
   status: LevelStatus;
   uploadedAt: number;
   rejectionReason?: string;
+  filePath?: string;
+  analysis?: FileAnalysis;
 };
 
 export type ShopPhoto = {
@@ -51,6 +103,8 @@ export type ShopPhoto = {
   type: "front" | "interior" | "board" | "selfie";
   fileName: string;
   uploadedAt: number;
+  filePath?: string;
+  analysis?: FileAnalysis;
 };
 
 export type ShopVerification = {
