@@ -15,7 +15,7 @@ export const Route = createFileRoute("/partner/track/$orderId")({
   component: PartnerTrack,
 });
 
-const LOCATION_PUSH_MIN_INTERVAL_MS = 8000;
+const LOCATION_PUSH_MIN_INTERVAL_MS = 3000;
 
 function PartnerTrack() {
   const { orderId } = Route.useParams();
