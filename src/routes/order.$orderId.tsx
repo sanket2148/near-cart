@@ -95,6 +95,7 @@ function OrderPage() {
   });
   const { ensureSession, getSession, setStatus, setRiderPosition } = useTracking();
   const session = getSession(orderId);
+  const sim = useDeliverySimulation(orderId, session);
 
   // Create the shared tracking session for this order (once) — pickup/drop
   // only; status and rider position come from the real backend below.
