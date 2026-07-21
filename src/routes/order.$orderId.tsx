@@ -2,7 +2,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Phone, Loader2, Star } from "lucide-react";
+import { Phone, Loader2, Star, Play, Square } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { EmailOtpAuth } from "@/components/EmailOtpAuth";
 import { ReviewForm } from "@/components/ReviewForm";
@@ -19,6 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { LiveTrackView } from "@/components/tracking/LiveTrackView";
 import { useTracking } from "@/lib/tracking";
 import { geocodeSeed } from "@/lib/geo";
+import { useDeliverySimulation } from "@/hooks/useDeliverySimulation";
 
 export const Route = createFileRoute("/order/$orderId")({
   head: () => ({ meta: [{ title: "Track Order — NearCart" }] }),
@@ -94,6 +95,7 @@ function OrderPage() {
   });
   const { ensureSession, getSession, setStatus, setRiderPosition } = useTracking();
   const session = getSession(orderId);
+  const sim = useDeliverySimulation(orderId, session);
 
   // Create the shared tracking session for this order (once) — pickup/drop
   // only; status and rider position come from the real backend below.
@@ -255,16 +257,36 @@ function OrderPage() {
           session={session}
           controls={
             session.status !== "delivered" && (
-              <div className="flex items-center gap-3 rounded-2xl border border-border bg-card p-3 shadow-card">
-                <span className="flex h-11 w-11 items-center justify-center rounded-full bg-secondary text-xl">
-                  🛵
-                </span>
-                <div className="flex-1">
-                  <p className="text-sm font-bold">{session.riderName}</p>
-                  <p className="text-xs text-muted-foreground">Your delivery partner</p>
+              <div className="space-y-3">
+                <div className="flex items-center gap-3 rounded-2xl border border-border bg-card p-3 shadow-card">
+                  <span className="flex h-11 w-11 items-center justify-center rounded-full bg-secondary text-xl">
+                    🛵
+                  </span>
+                  <div className="flex-1">
+                    <p className="text-sm font-bold">{session.riderName}</p>
+                    <p className="text-xs text-muted-foreground">Your delivery partner</p>
+                  </div>
+                  <Button variant="outline" size="icon" aria-label="Call rider">
+                    <Phone className="h-4 w-4" />
+                  </Button>
                 </div>
-                <Button variant="outline" size="icon" aria-label="Call rider">
-                  <Phone className="h-4 w-4" />
+                {/* Demo / driver simulator — useful when previewing tracking
+                    without a real partner sharing GPS. Cosmetic only: writes
+                    to the local tracking store, does not push to the backend. */}
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={sim.running ? sim.stop : sim.start}
+                >
+                  {sim.running ? (
+                    <>
+                      <Square className="h-4 w-4" /> Stop demo ride
+                    </>
+                  ) : (
+                    <>
+                      <Play className="h-4 w-4" /> Simulate driver (demo)
+                    </>
+                  )}
                 </Button>
               </div>
             )
