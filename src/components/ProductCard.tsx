@@ -1,27 +1,48 @@
-import { Minus, Plus } from "lucide-react";
+import { Minus, Plus, Heart } from "lucide-react";
 import type { Product } from "@/lib/data";
 import { formatINR } from "@/lib/data";
 import { useCart } from "@/lib/cart";
 import { cn } from "@/lib/utils";
 
-export function ProductCard({ product }: { product: Product }) {
+type Props = {
+  product: Product;
+  wishlisted?: boolean;
+  onToggleWishlist?: (productId: string) => void;
+};
+
+const LOW_STOCK_THRESHOLD = 5;
+
+export function ProductCard({ product, wishlisted, onToggleWishlist }: Props) {
   const { add, setQty, qtyOf } = useCart();
   const qty = qtyOf(product.id);
   const out = !product.inStock;
+  const lowStock = !out && product.stockQty != null && product.stockQty <= LOW_STOCK_THRESHOLD;
 
   return (
     <div
       className={cn(
-        "flex items-center gap-3 rounded-xl border border-border bg-card p-3 shadow-card",
+        "relative flex items-center gap-3 rounded-xl border border-border bg-card p-3 shadow-card",
         out && "opacity-60",
       )}
     >
-      <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-secondary text-2xl">
-        {product.emoji}
-      </div>
+      {product.imageUrl ? (
+        <img
+          src={product.imageUrl}
+          alt={product.name}
+          className="h-14 w-14 shrink-0 rounded-lg object-cover"
+        />
+      ) : (
+        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-lg bg-secondary text-2xl">
+          {product.emoji}
+        </div>
+      )}
       <div className="min-w-0 flex-1">
-        <h4 className="truncate text-sm font-semibold leading-tight">{product.name}</h4>
-        <p className="text-xs text-muted-foreground">{product.unit}</p>
+        <h4 className="truncate text-sm font-semibold leading-tight pr-5">{product.name}</h4>
+        {lowStock ? (
+          <p className="text-xs font-semibold text-destructive">Only {product.stockQty} left</p>
+        ) : (
+          <p className="text-xs text-muted-foreground">{product.unit}</p>
+        )}
         <div className="mt-1 flex items-center gap-1.5">
           <span className="text-sm font-bold">{formatINR(product.price)}</span>
           {product.mrp && product.mrp > product.price && (
@@ -31,6 +52,16 @@ export function ProductCard({ product }: { product: Product }) {
           )}
         </div>
       </div>
+
+      {onToggleWishlist && (
+        <button
+          onClick={() => onToggleWishlist(product.id)}
+          aria-label={wishlisted ? "Remove from wishlist" : "Add to wishlist"}
+          className="absolute right-3 top-3 text-muted-foreground transition-colors hover:text-rose-500"
+        >
+          <Heart className={cn("h-4 w-4", wishlisted && "fill-rose-500 text-rose-500")} />
+        </button>
+      )}
 
       {out ? (
         <span className="rounded-md bg-muted px-2 py-1 text-xs font-semibold text-muted-foreground">

@@ -1,4 +1,12 @@
-import { CheckCircle2, AlertTriangle, ArrowRight, FileText, Landmark, MapPin } from "lucide-react";
+import {
+  CheckCircle2,
+  AlertTriangle,
+  ArrowRight,
+  FileText,
+  Landmark,
+  MapPin,
+  Loader2,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BUSINESS_TYPE_CONFIG, type ShopVerification } from "@/lib/verification";
 
@@ -6,9 +14,10 @@ type Props = {
   verification: ShopVerification;
   onSubmit: () => void;
   onGoToStep: (step: number) => void;
+  submitting?: boolean;
 };
 
-export function StepReviewSubmit({ verification, onSubmit, onGoToStep }: Props) {
+export function StepReviewSubmit({ verification, onSubmit, onGoToStep, submitting }: Props) {
   const bType = verification.businessType;
   const config = bType ? BUSINESS_TYPE_CONFIG[bType] : null;
 
@@ -141,10 +150,14 @@ export function StepReviewSubmit({ verification, onSubmit, onGoToStep }: Props) 
             {l5.lat && l5.lng && (
               <p className="flex items-center gap-1.5">
                 <MapPin className="h-3.5 w-3.5 text-primary" />
-                <span>GPS coordinates captured ({l5.lat.toFixed(4)}, {l5.lng.toFixed(4)})</span>
+                <span>
+                  GPS coordinates captured ({l5.lat.toFixed(4)}, {l5.lng.toFixed(4)})
+                </span>
               </p>
             )}
-            <p>Photos uploaded: {l5.photos.length} ({l5.photos.map((p) => p.type).join(", ")})</p>
+            <p>
+              Photos uploaded: {l5.photos.length} ({l5.photos.map((p) => p.type).join(", ")})
+            </p>
           </div>
         </div>
       </div>
@@ -155,19 +168,23 @@ export function StepReviewSubmit({ verification, onSubmit, onGoToStep }: Props) 
           <div>
             <h4 className="text-sm font-bold text-amber-800">Verification terms</h4>
             <p className="mt-1 text-xs text-amber-700 leading-snug">
-              By submitting, you declare that all information and documents provided are genuine. Fake or modified documents will lead to permanent suspension of your shop.
+              By submitting, you declare that all information and documents provided are genuine.
+              Fake or modified documents will lead to permanent suspension of your shop.
             </p>
           </div>
         </div>
       </div>
 
-      <Button
-        variant="hero"
-        size="xl"
-        className="w-full"
-        onClick={onSubmit}
-      >
-        Submit for verification <ArrowRight className="ml-1 h-4 w-4" />
+      <Button variant="hero" size="xl" className="w-full" disabled={submitting} onClick={onSubmit}>
+        {submitting ? (
+          <>
+            <Loader2 className="mr-1 h-4 w-4 animate-spin" /> Submitting…
+          </>
+        ) : (
+          <>
+            Submit for verification <ArrowRight className="ml-1 h-4 w-4" />
+          </>
+        )}
       </Button>
     </div>
   );

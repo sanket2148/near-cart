@@ -206,7 +206,7 @@ function OrderCard({ order }: { order: SellerOrder }) {
                   <span className="block text-xs text-muted-foreground">{partner.phone}</span>
                 </p>
               ) : (
-                <Select onValueChange={(v) => { assignPartner(order.id, v); toast.success("Partner assigned"); }}>
+                <Select onValueChange={(v) => { assignPartner(order.id, v); toast.success("Partner notified — waiting for them to accept"); }}>
                   <SelectTrigger className="mt-2">
                     <SelectValue placeholder="Assign a delivery partner" />
                   </SelectTrigger>

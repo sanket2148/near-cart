@@ -12,6 +12,7 @@ type CartContextValue = {
   itemCount: number;
   subtotal: number;
   add: (product: Product) => void;
+  addMany: (items: { product: Product; quantity: number }[]) => void;
   remove: (productId: string) => void;
   setQty: (productId: string, qty: number) => void;
   clear: () => void;
@@ -28,7 +29,10 @@ export function CartProvider({ children }: { children: ReactNode }) {
   // hydrate from localStorage (client only)
   useEffect(() => {
     try {
-      const raw = (typeof window !== "undefined" && typeof localStorage !== "undefined") ? localStorage.getItem(STORAGE_KEY) : null;
+      const raw =
+        typeof window !== "undefined" && typeof localStorage !== "undefined"
+          ? localStorage.getItem(STORAGE_KEY)
+          : null;
       if (raw) {
         const parsed = JSON.parse(raw) as { shopId: string | null; lines: CartLine[] };
         setShopId(parsed.shopId ?? null);
@@ -67,6 +71,29 @@ export function CartProvider({ children }: { children: ReactNode }) {
     });
   }
 
+  /** Adds several products in one atomic update — used by reorder ("Buy it again"), where calling `add()` in a loop would repeatedly re-evaluate the stale shop-switch check against the same pre-render `shopId` and silently drop earlier items. */
+  function addMany(items: { product: Product; quantity: number }[]) {
+    if (items.length === 0) return;
+    const targetShopId = items[0].product.shopId;
+    setLines((prev) => {
+      const base = shopId && shopId === targetShopId ? prev : [];
+      const next = [...base];
+      for (const { product, quantity } of items) {
+        const existingIndex = next.findIndex((l) => l.product.id === product.id);
+        if (existingIndex >= 0) {
+          next[existingIndex] = {
+            ...next[existingIndex],
+            quantity: next[existingIndex].quantity + quantity,
+          };
+        } else {
+          next.push({ product, quantity });
+        }
+      }
+      return next;
+    });
+    if (shopId !== targetShopId) setShopId(targetShopId);
+  }
+
   function setQty(productId: string, qty: number) {
     setLines((prev) => {
       const next = prev
@@ -93,7 +120,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const value = useMemo<CartContextValue>(() => {
     const itemCount = lines.reduce((n, l) => n + l.quantity, 0);
     const subtotal = lines.reduce((n, l) => n + l.product.price * l.quantity, 0);
-    return { shopId, lines, itemCount, subtotal, add, remove, setQty, clear, qtyOf };
+    return { shopId, lines, itemCount, subtotal, add, addMany, remove, setQty, clear, qtyOf };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shopId, lines]);
 

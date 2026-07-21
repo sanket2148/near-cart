@@ -8,44 +8,61 @@
 
 ## 1. Conventions
 
-- **Base path:** `/api/v1`. All requests/responses are JSON.
-- **Auth:** `Authorization: Bearer <jwt>`. JWT carries `sub` (user id) + `roles[]`. Role enforced per endpoint.
 - **Money:** integer paise.
 - **IDs:** UUID strings.
 - **Timestamps:** ISO 8601 UTC.
-- **Idempotency:** mutations that move money/create orders accept header `Idempotency-Key`.
-- **Errors:** consistent envelope (see §11). HTTP status reflects category.
-- **Pagination:** `?limit=20&cursor=<opaque>`; responses return `{ data, next_cursor }`.
+- **Idempotency:** mutations that move money/create orders accept an `idempotencyKey` param.
+- **Errors:** consistent envelope (see §11).
+- **Pagination:** `{ limit, cursor }` in, `{ data, nextCursor }` out.
 - **Roles tags below:** 🟢 customer · 🟠 shop_owner · 🔵 partner · 🟣 admin · ⚪ public.
+
+> **Read this doc as a capability contract, not literal HTTP routes.** Every `METHOD /path` below names an *operation* — its inputs, outputs, and role requirement are authoritative. See §0 for how each operation is actually implemented in this codebase.
+
+---
+
+## 0. Implementation reality (last updated 2026-07-17 — read this before the tables below, several have diverged from what actually shipped)
+
+This project is TanStack Start (SSR React, not a standalone REST service). The backend build-out (Phases A–H, see `plan/tasks/backlog.md`/`decisions.md`) is done; the design below mostly held, with the corrections noted inline.
+
+- **Transport — TanStack Start server functions, not raw HTTP + Bearer JWT.** Each operation below (e.g. `POST /orders`) is a typed `createServerFn` the client calls directly (`placeOrder({ data })`), not a fetch to a URL. **Exception, confirmed as planned:** the Razorpay webhook is a real HTTP endpoint — but at `src/routes/api.webhooks.razorpay.ts` (`/api/webhooks/razorpay`), using TanStack Router's flat dot-segment file convention, **not** a nested `src/routes/api/payments/webhook.ts` as originally sketched below. All server functions are protected by the framework's own `createCsrfMiddleware` (`src/start.ts`, added 2026-07-17 — this was a real gap, not just a plan detail).
+- **Auth — REVERTED to a custom phone/OTP flow, NOT Supabase Auth sessions.** The 2026-07-12 plan below (`supabase.auth.signInWithOtp`) was **not** what shipped. `src/lib/auth.tsx` is a custom dev-mode phone/OTP flow with a plain `localStorage` session; `src/lib/auth-bridge/` bridges a verified login to a *real* `auth.users` row via the Admin API (`ensureRealUser`) purely so DB foreign keys resolve — the browser never holds an actual Supabase JWT. This has a real, load-bearing consequence: RLS-gated `postgres_changes` Realtime is unreachable from the browser (anon key → zero rows), which is why every "live" surface (order status, partner GPS — see §12) uses polling, not websockets. See `plan/tasks/decisions.md`, Phase H, for the full finding. Migrating to real `supabase.auth` sessions is a live backlog item, not done.
+- **Module structure — mostly as planned, with real names and three modules the original plan didn't anticipate:**
+  ```
+  src/lib/
+    catalog/        backend.server.ts + api.functions.ts   (§5 — Phase B)
+    orders/         backend.server.ts + api.functions.ts   (§6 — Phase C)
+    payments/       backend.server.ts + api.functions.ts + checkout-widget.ts   (§7 — Phase F, SCAFFOLDED not live)
+    seller-data/    backend.server.ts + api.functions.ts   (§8 — Phase D; "-data" suffix, not "seller/" as originally planned)
+    partner-data/   backend.server.ts + api.functions.ts   (§9 — Phase E; "-data" suffix)
+    admin-data/     backend.server.ts + api.functions.ts   (§10 — Phase G, scoped to the verification queue only; "-data" suffix)
+    tracking-data/  backend.server.ts + api.functions.ts   (not in the original plan — order-status + partner-GPS reads/writes, added for the Phase H GPS follow-up)
+    auth-bridge/    backend.server.ts + api.functions.ts   (not in the original plan — see Auth note above)
+    doc-verify/     backend.server.ts (no api.functions.ts — called server-to-server from verification/)   (not in the original plan — real GST/FSSAI/PAN registry checks, SCAFFOLDED not live)
+    api-docs/       openapi.ts   (not in the original plan — hand-maintained OpenAPI spec backing /api-docs)
+    verification/   backend.server.ts + api.functions.ts   (pre-existed this plan — same two-file pattern)
+  src/routes/
+    api.webhooks.razorpay.ts       (§7 webhook — real HTTP route, signature-verified)
+    api-docs.tsx, api-docs.openapi[.]json.ts     (Swagger UI + its JSON spec)
+  ```
+  **Do not nest these under a folder literally named `server/`** (e.g. `src/lib/server/catalog/`) — TanStack Start's Vite plugin has an import-protection rule that denies importing *anything* from a path matching `**/server/**` from client code, including the client-safe `api.functions.ts` wrapper itself. This was tried during Phase B, passed `tsc --noEmit` cleanly, and only broke when actually loaded in a browser (`[import-protection] Import denied in client environment`) — see `plan/tasks/decisions.md` 2026-07-12 (Phase B). The `.server.ts` filename suffix alone is what correctly keeps `backend.server.ts` out of the client bundle; no directory-level wrapper is needed or allowed. This held for every module built since, including cross-module server-to-server calls (e.g. `orders/backend.server.ts` dynamically importing `payments/backend.server.ts`) — those are safe precisely because both sides are already server-only.
+  `backend.server.ts` holds the actual DB/Supabase-admin logic (never imported by client code). `api.functions.ts` holds thin `createServerFn` wrappers with Zod input validation (`.validator()`, **not** the deprecated `.inputValidator()` that `verification/api.functions.ts` still uses as a pre-existing artifact) that dynamically `import()` the backend module.
+- **Client data-fetching** — TanStack Query throughout, as planned, including `refetchInterval` polling (not Realtime — see Auth note above) for the surfaces that need to feel live: customer order list/detail, seller order dashboard, partner job list.
+- **Realtime (§12) — NOT built as originally planned.** True `postgres_changes`/`broadcast` Realtime was investigated and found infeasible without real Supabase Auth sessions in the browser (see Auth note above). What shipped instead: `refetchInterval` polling for order status and partner GPS position (`src/lib/tracking-data/`), with `src/lib/tracking.tsx`'s `BroadcastChannel`/localStorage store kept as the shared client-side session shape (unchanged hook API) but now populated from real polled data instead of the old scripted demo simulation for the customer-facing view.
+- **API reference:** every server function + the webhook route is documented at `/api-docs` (self-hosted Swagger UI, spec in `src/lib/api-docs/openapi.ts`) — read that for exact request/response shapes rather than the tables below, which describe the *planned* contract and have known drift (documented per-operation in the spec itself, e.g. `quoteOrder`'s amounts being in paise while every other order operation uses decimal rupees).
 
 ---
 
 ## 2. Auth & profile
 
+> **⚠️ Not what shipped — see §0 "Auth" note.** This section describes the 2026-07-12 plan (`supabase.auth.signInWithOtp`), which was superseded by a custom `localStorage`-session phone/OTP flow (`src/lib/auth.tsx` + `src/lib/auth-bridge/`). Kept below for historical context and because it's still the intended end state once real Supabase Auth sessions are adopted — just not current reality.
+
 ### POST /auth/otp/request ⚪
-Request an OTP for a phone number.
-```jsonc
-// req
-{ "phone": "+919876543210" }
-// res 200
-{ "request_id": "uuid", "expires_in": 300 }
-```
+**Planned as superseded by Supabase Auth directly — did not actually happen:**
+- ~~`POST /auth/otp/request`~~ → `supabase.auth.signInWithOtp({ phone })`
+- ~~`POST /auth/otp/verify`~~ → `supabase.auth.verifyOtp({ phone, token, type: "sms" })`
+- ~~`POST /auth/refresh`~~ → `supabase-js` refreshes the session automatically
 
-### POST /auth/otp/verify ⚪
-Verify OTP, create user if new, return tokens.
-```jsonc
-// req
-{ "phone": "+919876543210", "code": "123456" }
-// res 200
-{
-  "access_token": "jwt", "refresh_token": "jwt",
-  "user": { "id": "uuid", "phone": "+91...", "full_name": null, "roles": ["customer"] },
-  "is_new_user": true
-}
-```
-
-### POST /auth/refresh ⚪
-`{ "refresh_token" } → { access_token, refresh_token }`
+`public.users` is populated automatically by a Postgres trigger (`on_auth_user_created` in `supabase/migrations/0001_initial_schema.sql`) that fires the moment Supabase Auth's Admin API inserts an `auth.users` row (via `auth-bridge`'s `ensureRealUser`, not a real sign-in flow) — not a client-callable server function. This part did ship as planned.
 
 ### GET /auth/me 🟢🟠🔵🟣
 Returns current user + roles + KYC status.

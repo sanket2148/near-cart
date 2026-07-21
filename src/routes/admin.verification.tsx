@@ -1,167 +1,101 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import {
-  ArrowLeft,
-  CheckCircle2,
-  XCircle,
   AlertTriangle,
   FileText,
   MapPin,
   Clock,
   UserCheck,
   Search,
-  Filter,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import {
-  type ShopVerification,
-  type BusinessType,
-  BUSINESS_TYPE_CONFIG,
-  DOC_TYPE_LABELS,
-  VERIFICATION_STORAGE_KEY,
-} from "@/lib/verification";
-import { formatINR, shops as seedShops } from "@/lib/data";
+import { DOC_TYPE_LABELS, loadVerification, saveVerification, verificationStorageKey, type ShopVerification } from "@/lib/verification";
+import { listShopsForReview, approveShop, rejectShop } from "@/lib/admin-data/api.functions";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/admin/verification")({
   component: AdminVerificationPage,
 });
 
-// Create mock verification queues for admin demo
-const MOCK_PENDING_SHOPS = [
-  {
-    shopId: "ramesh-stores",
-    name: "Ramesh General Stores",
-    businessType: "grocery",
-    createdAt: Date.now() - 3 * 3600 * 1000,
-    overallStatus: "pending_review",
-    riskLevel: "low",
-    flags: [] as string[],
-    levels: {
-      l1_contact: { phoneNumber: "9880012345", emailAddress: "ramesh@gmail.com" },
-      l2_documents: {
-        documents: [
-          { id: "1", docType: "shop_establishment", fileName: "shop_license.pdf", status: "submitted" },
-        ],
-      },
-      l3_kyc: { panName: "Ramesh Kumar", panNumber: "ABCDE1234F", aadhaarLast4: "5678" },
-      l4_bank: { accountNumber: "1234567890", ifsc: "SBIN0001234", accountHolderName: "Ramesh Kumar" },
-      l5_gps: { lat: 12.9352, lng: 77.6245, photos: [{ type: "front", fileName: "front.jpg" }] },
-    },
-  },
-  {
-    shopId: "city-pharmacy",
-    name: "CityCare Pharmacy",
-    businessType: "pharmacy",
-    createdAt: Date.now() - 5 * 3600 * 1000,
-    overallStatus: "pending_review",
-    riskLevel: "high",
-    flags: ["reused_photo", "name_mismatch"],
-    levels: {
-      l1_contact: { phoneNumber: "9880067890", emailAddress: "citycare@gmail.com" },
-      l2_documents: {
-        documents: [
-          { id: "1", docType: "drug_license", fileName: "drug_license.pdf", status: "submitted" },
-          { id: "2", docType: "pharmacist_reg", fileName: "pharmacist_cert.pdf", status: "submitted" },
-        ],
-      },
-      l3_kyc: { panName: "Suresh Gowda", panNumber: "SURESH1234", aadhaarLast4: "1234" },
-      l4_bank: { accountNumber: "9876543210", ifsc: "ICIC0005678", accountHolderName: "Suresh Care Pharmacy" },
-      l5_gps: { lat: 12.9719, lng: 77.6412, photos: [{ type: "front", fileName: "front_pharmacy.jpg" }] },
-    },
-  },
-];
+type AdminShopReview = Awaited<ReturnType<typeof listShopsForReview>>[number];
+type QueueItem = AdminShopReview & { levels?: ShopVerification["levels"] };
 
 function AdminVerificationPage() {
-  const [items, setItems] = useState<any[]>([]);
-  const [selectedItem, setSelectedItem] = useState<any | null>(null);
+  const [items, setItems] = useState<QueueItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedItem, setSelectedItem] = useState<QueueItem | null>(null);
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState<string>("all");
   const [reviewNotes, setReviewNotes] = useState("");
 
   useEffect(() => {
-    // Load existing verification from localStorage if present
-    const stored = localStorage.getItem(VERIFICATION_STORAGE_KEY);
-    let currentPending = [...MOCK_PENDING_SHOPS] as any[];
-
-    if (stored) {
-      const parsed = JSON.parse(stored) as ShopVerification;
-      if (parsed.overallStatus === "pending_review") {
-        // Find corresponding mock shop or add it
-        const index = currentPending.findIndex((s) => s.shopId === parsed.shopId);
-        const transformed = {
-          shopId: parsed.shopId,
-          name: seedShops.find((s) => s.id === parsed.shopId)?.name || parsed.shopId,
-          businessType: parsed.businessType,
-          createdAt: parsed.updatedAt,
-          overallStatus: parsed.overallStatus,
-          riskLevel: parsed.businessType ? BUSINESS_TYPE_CONFIG[parsed.businessType]?.riskTier : "low",
-          flags: parsed.flagReasons || [],
-          levels: parsed.levels,
-        };
-
-        if (index > -1) {
-          currentPending[index] = transformed;
-        } else {
-          currentPending.unshift(transformed);
-        }
-      }
-    }
-
-    setItems(currentPending);
-    if (currentPending.length > 0) {
-      setSelectedItem(currentPending[0]);
-    }
+    listShopsForReview()
+      .then((real) => {
+        // Deep detail (documents, KYC, bank, GPS) is still localStorage-only
+        // — attach it where it happens to exist on this device (see the
+        // "not available on this device" fallback in the detail panel).
+        const withLocalDetail: QueueItem[] = real.map((r) => {
+          if (!localStorage.getItem(verificationStorageKey(r.shopId))) return r;
+          const local = loadVerification(r.shopId);
+          return { ...r, levels: local.levels };
+        });
+        setItems(withLocalDetail);
+        setSelectedItem(withLocalDetail[0] ?? null);
+      })
+      .finally(() => setLoading(false));
   }, []);
 
-  const handleApprove = () => {
+  const handleApprove = async () => {
     if (!selectedItem) return;
-
-    // Update locally
-    const updated = items.filter((i) => i.shopId !== selectedItem.shopId);
-    setItems(updated);
-
-    // Save approved status to localStorage for the shop owner
-    const stored = localStorage.getItem(VERIFICATION_STORAGE_KEY);
-    if (stored) {
-      const parsed = JSON.parse(stored) as ShopVerification;
-      if (parsed.shopId === selectedItem.shopId) {
-        parsed.overallStatus = "approved";
-        parsed.currentBadge = parsed.levels.l5_gps.lat ? "premium" : "verified";
-        parsed.levels.l7_review.status = "verified";
-        parsed.levels.l7_review.notes = reviewNotes;
-        localStorage.setItem(VERIFICATION_STORAGE_KEY, JSON.stringify(parsed));
-      }
+    try {
+      await approveShop({ data: { shopId: selectedItem.shopId } });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Could not approve — please try again.");
+      return;
     }
 
-    setSelectedItem(updated.length > 0 ? updated[0] : null);
+    // Same-device convenience: also flip the seller's local wizard state so
+    // their own dashboard reflects it immediately without a refetch.
+    if (localStorage.getItem(verificationStorageKey(selectedItem.shopId))) {
+      const parsed = loadVerification(selectedItem.shopId);
+      parsed.overallStatus = "approved";
+      parsed.currentBadge = parsed.levels.l5_gps.lat ? "premium" : "verified";
+      parsed.levels.l7_review.status = "verified";
+      parsed.levels.l7_review.notes = reviewNotes;
+      saveVerification(parsed);
+    }
+
+    const updated = items.filter((i) => i.shopId !== selectedItem.shopId);
+    setItems(updated);
+    setSelectedItem(updated[0] ?? null);
     setReviewNotes("");
     alert("Shop verification approved successfully!");
   };
 
-  const handleReject = () => {
+  const handleReject = async () => {
     if (!selectedItem) return;
-
-    // Update locally
-    const updated = items.filter((i) => i.shopId !== selectedItem.shopId);
-    setItems(updated);
-
-    // Save rejected status to localStorage for the shop owner
-    const stored = localStorage.getItem(VERIFICATION_STORAGE_KEY);
-    if (stored) {
-      const parsed = JSON.parse(stored) as ShopVerification;
-      if (parsed.shopId === selectedItem.shopId) {
-        parsed.overallStatus = "incomplete";
-        parsed.levels.l7_review.status = "rejected";
-        parsed.levels.l7_review.notes = reviewNotes;
-        localStorage.setItem(VERIFICATION_STORAGE_KEY, JSON.stringify(parsed));
-      }
+    try {
+      await rejectShop({ data: { shopId: selectedItem.shopId } });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Could not reject — please try again.");
+      return;
     }
 
-    setSelectedItem(updated.length > 0 ? updated[0] : null);
+    if (localStorage.getItem(verificationStorageKey(selectedItem.shopId))) {
+      const parsed = loadVerification(selectedItem.shopId);
+      parsed.overallStatus = "incomplete";
+      parsed.levels.l7_review.status = "rejected";
+      parsed.levels.l7_review.notes = reviewNotes;
+      saveVerification(parsed);
+    }
+
+    const updated = items.filter((i) => i.shopId !== selectedItem.shopId);
+    setItems(updated);
+    setSelectedItem(updated[0] ?? null);
     setReviewNotes("");
     alert("Shop verification rejected.");
   };
@@ -173,18 +107,10 @@ function AdminVerificationPage() {
   });
 
   return (
-    <div className="flex flex-col min-h-screen bg-background text-foreground p-6">
-      {/* Header */}
-      <div className="flex items-center gap-3 mb-6">
-        <Button variant="outline" size="icon" asChild>
-          <Link to="/seller">
-            <ArrowLeft className="h-4 w-4" />
-          </Link>
-        </Button>
-        <div>
-          <h1 className="text-2xl font-black tracking-tight">Admin Console</h1>
-          <p className="text-xs text-muted-foreground">Manual review queue (Level 7 Verification)</p>
-        </div>
+    <div className="flex flex-col">
+      <div className="mb-6">
+        <h2 className="text-lg font-bold">Verification Queue</h2>
+        <p className="text-xs text-muted-foreground">Manual review (Level 7 Verification)</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
@@ -220,7 +146,11 @@ function AdminVerificationPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0 max-h-[500px] overflow-y-auto divide-y divide-border">
-              {filteredItems.length === 0 ? (
+              {loading ? (
+                <div className="flex justify-center p-8 text-muted-foreground">
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                </div>
+              ) : filteredItems.length === 0 ? (
                 <div className="p-8 text-center text-muted-foreground text-sm">
                   Queue is empty. Excellent job!
                 </div>
@@ -303,68 +233,76 @@ function AdminVerificationPage() {
                 )}
 
                 {/* Level details grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Owner Identity */}
-                  <div className="border border-border rounded-xl p-4 space-y-2 bg-card">
-                    <h3 className="text-sm font-bold flex items-center gap-1.5">
-                      <UserCheck className="h-4 w-4 text-primary" /> Owner KYC Details
-                    </h3>
-                    <div className="text-xs space-y-1 text-muted-foreground">
-                      <p><span className="font-semibold text-foreground">Name:</span> {selectedItem.levels.l3_kyc.panName}</p>
-                      <p><span className="font-semibold text-foreground">PAN:</span> {selectedItem.levels.l3_kyc.panNumber}</p>
-                      <p><span className="font-semibold text-foreground">Aadhaar (Last 4):</span> ****{selectedItem.levels.l3_kyc.aadhaarLast4}</p>
-                    </div>
+                {!selectedItem.levels ? (
+                  <div className="rounded-2xl border border-dashed border-border bg-muted/30 p-6 text-center text-sm text-muted-foreground">
+                    Detailed verification data (documents, KYC, bank, GPS) isn't available on this device — it still
+                    lives in the seller's own browser storage until the full verification-pipeline migration is
+                    done. You can still approve/reject based on the summary above.
                   </div>
-
-                  {/* Bank Details */}
-                  <div className="border border-border rounded-xl p-4 space-y-2 bg-card">
-                    <h3 className="text-sm font-bold flex items-center gap-1.5">
-                      <Clock className="h-4 w-4 text-primary" /> Bank Details (Penny Drop Verified)
-                    </h3>
-                    <div className="text-xs space-y-1 text-muted-foreground">
-                      <p><span className="font-semibold text-foreground">A/C Name:</span> {selectedItem.levels.l4_bank.accountHolderName}</p>
-                      <p><span className="font-semibold text-foreground">A/C Number:</span> {selectedItem.levels.l4_bank.accountNumber}</p>
-                      <p><span className="font-semibold text-foreground">IFSC:</span> {selectedItem.levels.l4_bank.ifsc}</p>
-                    </div>
-                  </div>
-
-                  {/* Documents */}
-                  <div className="border border-border rounded-xl p-4 space-y-2 bg-card md:col-span-2">
-                    <h3 className="text-sm font-bold flex items-center gap-1.5">
-                      <FileText className="h-4 w-4 text-primary" /> Uploaded Documents
-                    </h3>
-                    <div className="space-y-2">
-                      {selectedItem.levels.l2_documents.documents.map((doc: any) => (
-                        <div key={doc.id} className="flex items-center justify-between bg-muted rounded-lg p-2.5 text-xs">
-                          <div className="flex items-center gap-2">
-                            <FileText className="h-4 w-4 text-primary" />
-                            <div>
-                              <p className="font-bold">{DOC_TYPE_LABELS[doc.docType as keyof typeof DOC_TYPE_LABELS] || doc.docType}</p>
-                              <p className="text-[10px] text-muted-foreground">{doc.fileName}</p>
-                            </div>
-                          </div>
-                          <Button size="sm" variant="outline">Preview Document</Button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* GPS & Photo */}
-                  <div className="border border-border rounded-xl p-4 space-y-2 bg-card md:col-span-2">
-                    <h3 className="text-sm font-bold flex items-center gap-1.5">
-                      <MapPin className="h-4 w-4 text-primary" /> Physical Verification & GPS
-                    </h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Owner Identity */}
+                    <div className="border border-border rounded-xl p-4 space-y-2 bg-card">
+                      <h3 className="text-sm font-bold flex items-center gap-1.5">
+                        <UserCheck className="h-4 w-4 text-primary" /> Owner KYC Details
+                      </h3>
                       <div className="text-xs space-y-1 text-muted-foreground">
-                        <p><span className="font-semibold text-foreground">GPS Location:</span> {selectedItem.levels.l5_gps.lat?.toFixed(6)}, {selectedItem.levels.l5_gps.lng?.toFixed(6)}</p>
-                        <p><span className="font-semibold text-foreground">Exif Match:</span> Yes (GPS matches upload device)</p>
+                        <p><span className="font-semibold text-foreground">Name:</span> {selectedItem.levels.l3_kyc.panName}</p>
+                        <p><span className="font-semibold text-foreground">PAN:</span> {selectedItem.levels.l3_kyc.panNumber}</p>
+                        <p><span className="font-semibold text-foreground">Aadhaar (Last 4):</span> ****{selectedItem.levels.l3_kyc.aadhaarLast4}</p>
                       </div>
-                      <div className="border border-border rounded-lg h-24 flex items-center justify-center bg-muted text-muted-foreground text-xs font-semibold">
-                        [Shop Map Marker Preview]
+                    </div>
+
+                    {/* Bank Details */}
+                    <div className="border border-border rounded-xl p-4 space-y-2 bg-card">
+                      <h3 className="text-sm font-bold flex items-center gap-1.5">
+                        <Clock className="h-4 w-4 text-primary" /> Bank Details (Penny Drop Verified)
+                      </h3>
+                      <div className="text-xs space-y-1 text-muted-foreground">
+                        <p><span className="font-semibold text-foreground">A/C Name:</span> {selectedItem.levels.l4_bank.accountHolderName}</p>
+                        <p><span className="font-semibold text-foreground">A/C Number:</span> {selectedItem.levels.l4_bank.accountNumber}</p>
+                        <p><span className="font-semibold text-foreground">IFSC:</span> {selectedItem.levels.l4_bank.ifsc}</p>
+                      </div>
+                    </div>
+
+                    {/* Documents */}
+                    <div className="border border-border rounded-xl p-4 space-y-2 bg-card md:col-span-2">
+                      <h3 className="text-sm font-bold flex items-center gap-1.5">
+                        <FileText className="h-4 w-4 text-primary" /> Uploaded Documents
+                      </h3>
+                      <div className="space-y-2">
+                        {selectedItem.levels.l2_documents.documents.map((doc) => (
+                          <div key={doc.id} className="flex items-center justify-between bg-muted rounded-lg p-2.5 text-xs">
+                            <div className="flex items-center gap-2">
+                              <FileText className="h-4 w-4 text-primary" />
+                              <div>
+                                <p className="font-bold">{DOC_TYPE_LABELS[doc.docType] || doc.docType}</p>
+                                <p className="text-[10px] text-muted-foreground">{doc.fileName}</p>
+                              </div>
+                            </div>
+                            <Button size="sm" variant="outline">Preview Document</Button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* GPS & Photo */}
+                    <div className="border border-border rounded-xl p-4 space-y-2 bg-card md:col-span-2">
+                      <h3 className="text-sm font-bold flex items-center gap-1.5">
+                        <MapPin className="h-4 w-4 text-primary" /> Physical Verification & GPS
+                      </h3>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="text-xs space-y-1 text-muted-foreground">
+                          <p><span className="font-semibold text-foreground">GPS Location:</span> {selectedItem.levels.l5_gps.lat?.toFixed(6)}, {selectedItem.levels.l5_gps.lng?.toFixed(6)}</p>
+                          <p><span className="font-semibold text-foreground">Exif Match:</span> Yes (GPS matches upload device)</p>
+                        </div>
+                        <div className="border border-border rounded-lg h-24 flex items-center justify-center bg-muted text-muted-foreground text-xs font-semibold">
+                          [Shop Map Marker Preview]
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
+                )}
 
                 {/* Action panel */}
                 <div className="border-t border-border pt-6 space-y-4">

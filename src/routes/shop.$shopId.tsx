@@ -1,17 +1,27 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { ArrowLeft, Star, Clock, Bike, Search } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { ProductCard } from "@/components/ProductCard";
+import { ShopReviews } from "@/components/ShopReviews";
 import { CartBar } from "@/components/CartBar";
-import { getShop, getProductsByShop } from "@/lib/data";
+import { getShop, getShopProducts } from "@/lib/catalog/api.functions";
+import { listWishlist, addToWishlist, removeFromWishlist } from "@/lib/wishlist/api.functions";
+import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 
 import { VerificationBadge } from "@/components/VerificationBadge";
 
 export const Route = createFileRoute("/shop/$shopId")({
-  head: ({ params }) => {
-    const shop = getShop(params.shopId);
+  loader: async ({ params }) => {
+    const shop = await getShop({ data: { shopId: params.shopId } });
+    const products = shop ? await getShopProducts({ data: { shopId: params.shopId } }) : [];
+    return { shop, products };
+  },
+  head: ({ loaderData }) => {
+    const shop = loaderData?.shop;
     const title = shop ? `${shop.name} — NearCart` : "Shop — NearCart";
     const desc = shop
       ? `Order from ${shop.name} in ${shop.area}. ${shop.tagline}. Delivered in ${shop.etaMinutes} min.`
@@ -29,10 +39,35 @@ export const Route = createFileRoute("/shop/$shopId")({
 });
 
 function ShopPage() {
-  const { shopId } = Route.useParams();
-  const shop = getShop(shopId);
-  const products = useMemo(() => getProductsByShop(shopId), [shopId]);
+  const { shop, products } = Route.useLoaderData();
   const [query, setQuery] = useState("");
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+
+  const { data: wishlist = [] } = useQuery({
+    queryKey: ["wishlist", user?.id],
+    queryFn: () => listWishlist(),
+    enabled: Boolean(user),
+  });
+  const wishlistedIds = new Set(wishlist.map((w) => w.productId));
+
+  async function toggleWishlist(productId: string) {
+    if (!user) {
+      toast("Log in to save items to your wishlist.");
+      return;
+    }
+    const alreadyIn = wishlistedIds.has(productId);
+    try {
+      if (alreadyIn) {
+        await removeFromWishlist({ data: { productId } });
+      } else {
+        await addToWishlist({ data: { productId } });
+      }
+      await queryClient.invalidateQueries({ queryKey: ["wishlist", user.id] });
+    } catch {
+      toast.error("Couldn't update your wishlist.");
+    }
+  }
 
   if (!shop) {
     return (
@@ -53,17 +88,28 @@ function ShopPage() {
   );
 
   return (
-    <AppShell subtitle={shop.area}>
-      <Link to="/" className="mb-3 inline-flex items-center gap-1 text-sm font-medium text-muted-foreground">
+    <AppShell subtitle={shop.area} wide>
+      <Link
+        to="/"
+        className="mb-3 inline-flex items-center gap-1 text-sm font-medium text-muted-foreground"
+      >
         <ArrowLeft className="h-4 w-4" /> Back
       </Link>
 
       {/* Shop header */}
       <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-card">
         <div className="flex items-center gap-4 bg-gradient-hero p-4">
-          <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-background text-4xl shadow-card">
-            {shop.emoji}
-          </div>
+          {shop.logoUrl ? (
+            <img
+              src={shop.logoUrl}
+              alt={shop.name}
+              className="h-20 w-20 shrink-0 rounded-2xl object-cover shadow-card"
+            />
+          ) : (
+            <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-background text-4xl shadow-card">
+              {shop.emoji}
+            </div>
+          )}
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-xl font-extrabold leading-tight">{shop.name}</h1>
@@ -80,12 +126,15 @@ function ShopPage() {
               <span className="flex items-center gap-1 text-muted-foreground">
                 <Bike className="h-3.5 w-3.5" /> {shop.distanceKm} km
               </span>
+              {shop.isOpen && shop.openLabel && (
+                <span className="flex items-center gap-1 text-primary">{shop.openLabel}</span>
+              )}
             </div>
           </div>
         </div>
         {!shop.isOpen && (
           <div className="bg-destructive/10 px-4 py-2 text-center text-sm font-semibold text-destructive">
-            This shop is currently closed
+            {shop.openLabel ?? "This shop is currently closed"}
           </div>
         )}
       </div>
@@ -119,28 +168,44 @@ function ShopPage() {
       {/* Products */}
       <div className="mt-4 space-y-5">
         {query ? (
-          <div className="space-y-2.5">
+          <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2">
             {filtered.length === 0 ? (
-              <p className="py-8 text-center text-sm text-muted-foreground">No matches found.</p>
+              <p className="col-span-full py-8 text-center text-sm text-muted-foreground">
+                No matches found.
+              </p>
             ) : (
-              filtered.map((p) => <ProductCard key={p.id} product={p} />)
+              filtered.map((p) => (
+                <ProductCard
+                  key={p.id}
+                  product={p}
+                  wishlisted={wishlistedIds.has(p.id)}
+                  onToggleWishlist={toggleWishlist}
+                />
+              ))
             )}
           </div>
         ) : (
           categoriesInShop.map((c) => (
             <section key={c} id={`cat-${c}`} className="scroll-mt-20">
               <h2 className={cn("mb-2.5 text-sm font-bold text-muted-foreground")}>{c}</h2>
-              <div className="space-y-2.5">
+              <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2">
                 {products
                   .filter((p) => p.category === c)
                   .map((p) => (
-                    <ProductCard key={p.id} product={p} />
+                    <ProductCard
+                      key={p.id}
+                      product={p}
+                      wishlisted={wishlistedIds.has(p.id)}
+                      onToggleWishlist={toggleWishlist}
+                    />
                   ))}
               </div>
             </section>
           ))
         )}
       </div>
+
+      <ShopReviews shopId={shop.id} rating={shop.rating} ratingCount={shop.ratingCount} />
 
       <CartBar />
     </AppShell>

@@ -1,14 +1,20 @@
 import { StyleSheet, Text, View, Pressable, Alert } from 'react-native';
-import { User, Shield, CreditCard, LogOut, ChevronRight } from 'lucide-react-native';
+import { useNavigation } from '@react-navigation/native';
+import { User, Shield, CreditCard, LogOut, ChevronRight, LogIn } from 'lucide-react-native';
+import { useAuth } from '../lib/auth';
+import { RootStackNavigationProp } from '../navigation/types';
 
 export default function SettingsScreen() {
+  const navigation = useNavigation<RootStackNavigationProp<'HomeTabs'>>();
+  const { user, logout } = useAuth();
+
   const handleLogout = () => {
     Alert.alert(
       "Log Out",
       "Are you sure you want to log out of NearCart?",
       [
         { text: "Cancel", style: "cancel" },
-        { text: "Logout", style: "destructive", onPress: () => {} }
+        { text: "Logout", style: "destructive", onPress: () => { logout(); } }
       ]
     );
   };
@@ -16,21 +22,28 @@ export default function SettingsScreen() {
   return (
     <View style={styles.container}>
       {/* Profile Section */}
-      <View style={styles.profileCard}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>SK</Text>
+      {user ? (
+        <View style={styles.profileCard}>
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>{user.email.slice(0, 2).toUpperCase()}</Text>
+          </View>
+          <View style={styles.profileMeta}>
+            <Text style={styles.profileName}>{user.email}</Text>
+            <Text style={styles.profileEmail}>NearCart customer</Text>
+          </View>
         </View>
-        <View style={styles.profileMeta}>
-          <Text style={styles.profileName}>Sanket Kumar</Text>
-          <Text style={styles.profileEmail}>sanket@nearcart.com</Text>
-        </View>
-
-        {/* Mobile Custom Trust Badge */}
-        <View style={styles.badge}>
-          <Shield size={12} color="#D97706" />
-          <Text style={styles.badgeText}>Trusted</Text>
-        </View>
-      </View>
+      ) : (
+        <Pressable style={styles.profileCard} onPress={() => navigation.navigate('Login')}>
+          <View style={styles.avatar}>
+            <LogIn size={18} color="#FFFFFF" />
+          </View>
+          <View style={styles.profileMeta}>
+            <Text style={styles.profileName}>Log in</Text>
+            <Text style={styles.profileEmail}>Tap to log in with your email</Text>
+          </View>
+          <ChevronRight size={16} color="#94A3B8" />
+        </Pressable>
+      )}
 
       {/* Menu Settings */}
       <View style={styles.menuList}>
@@ -58,13 +71,15 @@ export default function SettingsScreen() {
           <ChevronRight size={16} color="#94A3B8" />
         </Pressable>
 
-        <Pressable onPress={handleLogout} style={[styles.menuItem, styles.logoutItem]}>
-          <View style={styles.menuLeft}>
-            <LogOut size={18} color="#EF4444" />
-            <Text style={[styles.menuLabel, styles.logoutLabel]}>Log Out</Text>
-          </View>
-          <ChevronRight size={16} color="#EF4444" />
-        </Pressable>
+        {user && (
+          <Pressable onPress={handleLogout} style={[styles.menuItem, styles.logoutItem]}>
+            <View style={styles.menuLeft}>
+              <LogOut size={18} color="#EF4444" />
+              <Text style={[styles.menuLabel, styles.logoutLabel]}>Log Out</Text>
+            </View>
+            <ChevronRight size={16} color="#EF4444" />
+          </Pressable>
+        )}
       </View>
     </View>
   );
@@ -118,22 +133,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#64748B',
     marginTop: 2,
-  },
-  badge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FEF3C7',
-    borderWidth: 1,
-    borderColor: '#FDE68A',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    gap: 4,
-  },
-  badgeText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#D97706',
   },
   menuList: {
     backgroundColor: '#FFFFFF',

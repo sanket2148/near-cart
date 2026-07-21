@@ -5,13 +5,16 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 import {
+  BUSINESS_TYPE_CONFIG,
   type ShopVerification,
   type BusinessType,
   type DocumentUpload,
+  type LevelStatus,
   type ShopPhoto,
   saveVerification,
   computeBadgeTier,
 } from "@/lib/verification";
+import { finalizeVerification } from "@/lib/verification/api.functions";
 
 import { StepContactVerify } from "./verification/StepContactVerify";
 import { StepBusinessType } from "./verification/StepBusinessType";
@@ -37,9 +40,14 @@ const WIZARD_STEPS = [
   { step: 7, label: "Review" },
 ];
 
-export function VerificationWizard({ initialVerification, onCompleteAll, onBackToDashboard }: Props) {
+export function VerificationWizard({
+  initialVerification,
+  onCompleteAll,
+  onBackToDashboard,
+}: Props) {
   const [verification, setVerification] = useState<ShopVerification>(initialVerification);
   const [activeStep, setActiveStep] = useState<number>(initialVerification.currentStep || 1);
+  const [submitting, setSubmitting] = useState(false);
 
   const updateState = (updater: (prev: ShopVerification) => ShopVerification) => {
     setVerification((prev) => {
@@ -121,26 +129,50 @@ export function VerificationWizard({ initialVerification, onCompleteAll, onBackT
     updateState((prev) => {
       const existingDocs = prev.levels.l2_documents.documents;
       const index = existingDocs.findIndex((d) => d.docType === doc.docType);
-      let updatedDocs = [...existingDocs];
+      const updatedDocs = [...existingDocs];
       if (index > -1) {
         updatedDocs[index] = doc;
       } else {
         updatedDocs.push(doc);
       }
 
-      // Mark level as verified on frontend once docs are submitted (mocking direct verification)
+      const requiredDocs = prev.businessType
+        ? BUSINESS_TYPE_CONFIG[prev.businessType].requiredDocs
+        : [];
+      const anyRequiredRejected = requiredDocs.some((d) =>
+        updatedDocs.some((u) => u.docType === d && u.status === "rejected"),
+      );
+      const allRequiredVerified =
+        requiredDocs.length > 0 &&
+        requiredDocs.every((d) =>
+          updatedDocs.some((u) => u.docType === d && u.status === "verified"),
+        );
+      const allRequiredUploaded = requiredDocs.every((d) =>
+        updatedDocs.some((u) => u.docType === d && u.status !== "rejected"),
+      );
+
+      let status: LevelStatus = "in_progress";
+      if (anyRequiredRejected) status = "rejected";
+      else if (requiredDocs.length === 0 ? updatedDocs.length > 0 : allRequiredVerified)
+        status = "verified";
+      else if (allRequiredUploaded) status = "submitted";
+
       return {
         ...prev,
         levels: {
           ...prev.levels,
-          l2_documents: {
-            status: "verified",
-            documents: updatedDocs,
-          },
+          l2_documents: { status, documents: updatedDocs },
         },
       };
     });
-    toast.success("Document uploaded successfully");
+
+    if (doc.status === "rejected") {
+      toast.error(doc.rejectionReason ?? "Document was rejected — please re-upload.");
+    } else if (doc.status === "verified") {
+      toast.success("Document verified");
+    } else {
+      toast.success("Document submitted — under review");
+    }
   };
 
   const handleKYCUpdate = (data: Partial<ShopVerification["levels"]["l3_kyc"]>) => {
@@ -190,9 +222,10 @@ export function VerificationWizard({ initialVerification, onCompleteAll, onBackT
   const handlePhotoAdd = (photo: ShopPhoto) => {
     updateState((prev) => {
       const updatedPhotos = [...prev.levels.l5_gps.photos, photo];
-      const hasFront = updatedPhotos.some((p) => p.type === "front");
-      const hasBoard = updatedPhotos.some((p) => p.type === "board");
+      const front = updatedPhotos.find((p) => p.type === "front");
+      const board = updatedPhotos.find((p) => p.type === "board");
       const gpsSet = prev.levels.l5_gps.lat !== null && prev.levels.l5_gps.lng !== null;
+      const requiredLooksGood = (p?: ShopPhoto) => !!p && p.analysis?.decision !== "REJECTED";
 
       return {
         ...prev,
@@ -201,7 +234,10 @@ export function VerificationWizard({ initialVerification, onCompleteAll, onBackT
           l5_gps: {
             ...prev.levels.l5_gps,
             photos: updatedPhotos,
-            status: gpsSet && hasFront && hasBoard ? "verified" : prev.levels.l5_gps.status,
+            status:
+              gpsSet && requiredLooksGood(front) && requiredLooksGood(board)
+                ? "verified"
+                : prev.levels.l5_gps.status,
           },
         },
       };
@@ -209,33 +245,71 @@ export function VerificationWizard({ initialVerification, onCompleteAll, onBackT
     toast.success(`Photo of ${photo.type} uploaded`);
   };
 
-  const handleSubmit = () => {
-    // Submit all and mark AI checks + manual review as verified/pending
-    updateState((prev) => {
-      const nextBadge = computeBadgeTier(prev);
-      return {
-        ...prev,
-        levels: {
-          ...prev.levels,
-          l6_ai: { status: "verified" },
-          l7_review: { status: "verified", notes: "Approved by trust team automatically (Mock)" },
+  const handleSubmit = async () => {
+    setSubmitting(true);
+    try {
+      const overall = await finalizeVerification({
+        data: {
+          merchantRef: verification.merchantRef,
+          shopId: verification.shopId,
+          form: {
+            ownerName: verification.levels.l3_kyc.panName || undefined,
+            businessType: verification.businessType || undefined,
+          },
         },
-        currentBadge: nextBadge,
-        overallStatus: "approved",
+      });
+      const decision = overall?.decision ?? "UNDER_REVIEW";
+
+      const l6Status: LevelStatus = decision === "REJECTED" ? "rejected" : "verified";
+      const l7Status: LevelStatus =
+        decision === "VERIFIED" ? "verified" : decision === "REJECTED" ? "rejected" : "submitted";
+      const notes =
+        decision === "VERIFIED"
+          ? "Approved automatically by the verification pipeline."
+          : decision === "REJECTED"
+            ? "Rejected — one or more documents failed verification. Re-upload and resubmit."
+            : "Submitted — pending manual review by the trust team.";
+      const rejectedDocs = verification.levels.l2_documents.documents.filter(
+        (d) => d.status === "rejected",
+      );
+
+      const next: ShopVerification = {
+        ...verification,
+        levels: {
+          ...verification.levels,
+          l6_ai: { status: l6Status },
+          l7_review: { status: l7Status, notes },
+        },
+        overallStatus:
+          decision === "VERIFIED"
+            ? "approved"
+            : decision === "REJECTED"
+              ? "incomplete"
+              : "pending_review",
+        flagged: decision === "REJECTED",
+        flagReasons:
+          decision === "REJECTED"
+            ? rejectedDocs.map((d) => d.rejectionReason ?? `${d.docType} rejected`)
+            : verification.flagReasons,
         updatedAt: Date.now(),
       };
-    });
+      next.currentBadge = computeBadgeTier(next);
 
-    toast.success("Shop verification submitted successfully!");
-    onCompleteAll({
-      ...verification,
-      levels: {
-        ...verification.levels,
-        l6_ai: { status: "verified" },
-        l7_review: { status: "verified", notes: "Approved by trust team automatically (Mock)" },
-      },
-      overallStatus: "approved",
-    });
+      setVerification(next);
+      saveVerification(next);
+      onCompleteAll(next);
+
+      if (decision === "VERIFIED") toast.success("Shop verified successfully!");
+      else if (decision === "REJECTED")
+        toast.error("Verification rejected — please review and resubmit.");
+      else toast.success("Submitted for review. We'll notify you once approved.");
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : "Could not submit verification. Please try again.",
+      );
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const renderStep = () => {
@@ -295,6 +369,7 @@ export function VerificationWizard({ initialVerification, onCompleteAll, onBackT
             verification={verification}
             onGoToStep={handleGoToStep}
             onSubmit={handleSubmit}
+            submitting={submitting}
           />
         );
       default:
@@ -353,9 +428,7 @@ export function VerificationWizard({ initialVerification, onCompleteAll, onBackT
       </div>
 
       {/* Wizard Step Component */}
-      <div className="rounded-3xl border border-border bg-card p-6 shadow-card">
-        {renderStep()}
-      </div>
+      <div className="rounded-3xl border border-border bg-card p-6 shadow-card">{renderStep()}</div>
     </div>
   );
 }

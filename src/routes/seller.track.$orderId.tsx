@@ -1,10 +1,11 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ArrowLeft, Crosshair, Store } from "lucide-react";
 import { useSeller } from "@/lib/seller";
 import { useTracking } from "@/lib/tracking";
-import { getShop } from "@/lib/data";
+import { getShop } from "@/lib/catalog/api.functions";
 import { geocodeSeed } from "@/lib/geo";
 import { useLiveLocation } from "@/hooks/useLiveLocation";
 import { LiveTrackView } from "@/components/tracking/LiveTrackView";
@@ -21,7 +22,13 @@ function SellerTrack() {
   const { ensureSession, getSession, updatePickup } = useTracking();
   const session = getSession(orderId);
 
-  const ownShop = getShop(shop.id);
+  // Real shop lookup (was the old mock src/lib/data.ts's getShop, which
+  // never resolves a real DB shop UUID — noticed while building GPS
+  // tracking, see plan/tasks/decisions.md 2026-07-15).
+  const { data: ownShop } = useQuery({
+    queryKey: ["shop", shop.id],
+    queryFn: () => getShop({ data: { shopId: shop.id } }),
+  });
   const partner = partners.find((p) => p.id === order?.partnerId);
 
   const live = useLiveLocation((pos) =>
@@ -48,6 +55,15 @@ function SellerTrack() {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [order, orderId]);
+
+  // ensureSession only sets pickup once (no-op if the session already
+  // exists), so if the real shop query resolves *after* that first run —
+  // likely, since it's an async fetch — correct the pickup pin here too.
+  useEffect(() => {
+    if (!ownShop) return;
+    updatePickup(orderId, { lat: ownShop.lat, lng: ownShop.lng, label: `${shop.emoji} ${shop.name}` });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ownShop, orderId]);
 
   if (!order) {
     return (

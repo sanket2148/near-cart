@@ -1,10 +1,12 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { Search } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { Search, RefreshCw } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
-import { ShopCard } from "@/components/ShopCard";
+import { ShopCard, ShopCardSkeleton } from "@/components/ShopCard";
 import { CartBar } from "@/components/CartBar";
-import { categories, shops } from "@/lib/data";
+import { getCategories, getNearbyShops } from "@/lib/catalog/api.functions";
+import { useLocation } from "@/lib/location";
 import heroImg from "@/assets/hero.jpg";
 import { cn } from "@/lib/utils";
 
@@ -31,12 +33,33 @@ export const Route = createFileRoute("/")({
 function Index() {
   const navigate = useNavigate();
   const [active, setActive] = useState<string | null>(null);
+  const { state: locationState } = useLocation();
+
+  const { data: categories = [] } = useQuery({
+    queryKey: ["categories"],
+    queryFn: () => getCategories(),
+  });
+  const {
+    data: shops = [],
+    isLoading: shopsLoading,
+    isError: shopsErrored,
+    refetch: refetchShops,
+  } = useQuery({
+    queryKey: ["nearby-shops", locationState.coords],
+    queryFn: () =>
+      getNearbyShops({
+        data: {
+          lat: locationState.coords?.lat,
+          lng: locationState.coords?.lng,
+        },
+      }),
+  });
 
   const visibleShops = active ? shops.filter((s) => s.category === active) : shops;
   const openShops = [...visibleShops].sort((a, b) => Number(b.isOpen) - Number(a.isOpen));
 
   return (
-    <AppShell>
+    <AppShell wide>
       {/* Hero */}
       <section className="overflow-hidden rounded-3xl border border-border shadow-card">
         <div className="relative">
@@ -112,14 +135,34 @@ function Index() {
             </button>
           )}
         </div>
-        <div className="grid grid-cols-1 gap-3">
-          {openShops.map((shop) => (
-            <ShopCard key={shop.id} shop={shop} />
-          ))}
-          {openShops.length === 0 && (
-            <p className="py-8 text-center text-sm text-muted-foreground">
-              No shops in this category yet.
-            </p>
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+          {shopsLoading ? (
+            <>
+              <ShopCardSkeleton />
+              <ShopCardSkeleton />
+              <ShopCardSkeleton />
+            </>
+          ) : shopsErrored ? (
+            <div className="col-span-full flex flex-col items-center gap-2 py-8 text-center text-sm text-muted-foreground">
+              <p>Couldn't load shops near you. Check your connection and try again.</p>
+              <button
+                onClick={() => refetchShops()}
+                className="flex items-center gap-1.5 rounded-xl border border-border bg-card px-3 py-1.5 text-xs font-semibold text-foreground hover:bg-muted"
+              >
+                <RefreshCw className="h-3.5 w-3.5" /> Retry
+              </button>
+            </div>
+          ) : (
+            <>
+              {openShops.map((shop) => (
+                <ShopCard key={shop.id} shop={shop} />
+              ))}
+              {openShops.length === 0 && (
+                <p className="col-span-full py-8 text-center text-sm text-muted-foreground">
+                  No shops in this category yet.
+                </p>
+              )}
+            </>
           )}
         </div>
       </section>

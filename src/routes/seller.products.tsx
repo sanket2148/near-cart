@@ -1,9 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Plus, Trash2, Search, Pencil } from "lucide-react";
+import { Plus, Trash2, Search, Pencil, Camera, Loader2 } from "lucide-react";
 import { useSeller } from "@/lib/seller";
 import { formatINR, type Product } from "@/lib/data";
+import { uploadProductImage } from "@/lib/seller-data/api.functions";
+import { fileToBase64 } from "@/lib/verification";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -27,9 +30,7 @@ function SellerProducts() {
   const { products, toggleStock, removeProduct } = useSeller();
   const [query, setQuery] = useState("");
 
-  const filtered = products.filter((p) =>
-    p.name.toLowerCase().includes(query.toLowerCase()),
-  );
+  const filtered = products.filter((p) => p.name.toLowerCase().includes(query.toLowerCase()));
 
   return (
     <VerificationLockGate>
@@ -66,9 +67,17 @@ function SellerProducts() {
                 key={p.id}
                 className="flex items-center gap-3 rounded-2xl border border-border bg-card p-3 shadow-card"
               >
-                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-muted text-xl">
-                  {p.emoji}
-                </span>
+                {p.imageUrl ? (
+                  <img
+                    src={p.imageUrl}
+                    alt={p.name}
+                    className="h-11 w-11 shrink-0 rounded-xl object-cover"
+                  />
+                ) : (
+                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-muted text-xl">
+                    {p.emoji}
+                  </span>
+                )}
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-bold">{p.name}</p>
                   <p className="text-xs text-muted-foreground">
@@ -77,7 +86,9 @@ function SellerProducts() {
                   <span
                     className={cn(
                       "mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-bold",
-                      p.inStock ? "bg-primary/10 text-primary" : "bg-destructive/10 text-destructive",
+                      p.inStock
+                        ? "bg-primary/10 text-primary"
+                        : "bg-destructive/10 text-destructive",
                     )}
                   >
                     {p.inStock ? "In stock" : "Out of stock"}
@@ -114,15 +125,12 @@ function SellerProducts() {
   );
 }
 
-function ProductDialog({
-  product,
-  trigger,
-}: {
-  product?: Product;
-  trigger: React.ReactNode;
-}) {
+function ProductDialog({ product, trigger }: { product?: Product; trigger: React.ReactNode }) {
   const { addProduct, updateProduct } = useSeller();
+  const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [form, setForm] = useState({
     name: product?.name ?? "",
     emoji: product?.emoji ?? "📦",
@@ -133,6 +141,33 @@ function ProductDialog({
   });
 
   const set = (k: keyof typeof form, v: string) => setForm((f) => ({ ...f, [k]: v }));
+
+  async function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !product) return;
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+      toast.error("Use a JPEG, PNG, or WebP image.");
+      return;
+    }
+    setUploadingPhoto(true);
+    try {
+      const dataBase64 = await fileToBase64(file);
+      await uploadProductImage({
+        data: {
+          productId: product.id,
+          dataBase64,
+          mimeType: file.type as "image/jpeg" | "image/png" | "image/webp",
+        },
+      });
+      await queryClient.invalidateQueries({ queryKey: ["my-products"] });
+      toast.success("Product photo updated");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't upload the photo.");
+    } finally {
+      setUploadingPhoto(false);
+    }
+  }
 
   const submit = () => {
     if (!form.name.trim() || !form.price) {
@@ -166,6 +201,43 @@ function ProductDialog({
           <DialogTitle>{product ? "Edit product" : "Add product"}</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
+          {product && (
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploadingPhoto}
+                className="group relative flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-secondary text-2xl"
+              >
+                {product.imageUrl ? (
+                  <img
+                    src={product.imageUrl}
+                    alt={product.name}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  form.emoji
+                )}
+                <span className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
+                  {uploadingPhoto ? (
+                    <Loader2 className="h-4 w-4 animate-spin text-white" />
+                  ) : (
+                    <Camera className="h-4 w-4 text-white" />
+                  )}
+                </span>
+              </button>
+              <p className="text-xs text-muted-foreground">
+                Tap to {product.imageUrl ? "change" : "add"} a real product photo.
+              </p>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                className="hidden"
+                onChange={handlePhotoChange}
+              />
+            </div>
+          )}
           <div className="grid grid-cols-[64px_1fr] gap-3">
             <div className="space-y-1.5">
               <Label htmlFor="emoji">Icon</Label>

@@ -35,7 +35,6 @@ type Filter = "new" | "active" | "completed";
 const statusTone: Record<JobStatus, string> = {
   new: "bg-accent/15 text-accent",
   accepted: "bg-primary/10 text-primary",
-  at_shop: "bg-primary/10 text-primary",
   picked_up: "bg-primary/15 text-primary",
   delivered: "bg-muted text-muted-foreground",
   declined: "bg-destructive/10 text-destructive",
@@ -47,15 +46,13 @@ function PartnerDeliveries() {
 
   const filtered = jobs.filter((j) => {
     if (filter === "new") return j.status === "new";
-    if (filter === "active")
-      return ["accepted", "at_shop", "picked_up"].includes(j.status);
+    if (filter === "active") return ["accepted", "picked_up"].includes(j.status);
     return ["delivered", "declined"].includes(j.status);
   });
 
   const counts = {
     new: jobs.filter((j) => j.status === "new").length,
-    active: jobs.filter((j) => ["accepted", "at_shop", "picked_up"].includes(j.status))
-      .length,
+    active: jobs.filter((j) => ["accepted", "picked_up"].includes(j.status)).length,
     completed: jobs.filter((j) => ["delivered", "declined"].includes(j.status)).length,
   };
 
@@ -107,7 +104,7 @@ function JobCard({ job }: { job: DeliveryJob }) {
   const [open, setOpen] = useState(job.status === "new");
 
   const next = nextJobStatus(job.status);
-  const isActive = ["accepted", "at_shop", "picked_up"].includes(job.status);
+  const isActive = ["accepted", "picked_up"].includes(job.status);
 
   const handleAdvance = () => {
     advanceJob(job.id);

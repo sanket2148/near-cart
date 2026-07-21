@@ -1,8 +1,13 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { toast } from "sonner";
 import { Camera, MapPin, CheckCircle2, ArrowRight, Loader2, ImagePlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import type { ShopPhoto, ShopVerification } from "@/lib/verification";
+import { fileToBase64, type ShopPhoto, type ShopVerification } from "@/lib/verification";
+import { submitVerificationFile } from "@/lib/verification/api.functions";
+
+const MAX_FILE_BYTES = 10 * 1024 * 1024;
+const ACCEPTED_TYPES = "image/jpeg,image/png,image/webp";
 
 type Props = {
   verification: ShopVerification;
@@ -22,6 +27,8 @@ export function StepShopPhotos({ verification, onUpdateGps, onAddPhoto, onComple
   const l5 = verification.levels.l5_gps;
   const [locating, setLocating] = useState(false);
   const [uploading, setUploading] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const pendingType = useRef<ShopPhoto["type"] | null>(null);
 
   const gpsSet = l5.lat !== null && l5.lng !== null;
   const photos = l5.photos;
@@ -40,20 +47,67 @@ export function StepShopPhotos({ verification, onUpdateGps, onAddPhoto, onComple
     setLocating(false);
   }
 
-  async function handlePhoto(type: ShopPhoto["type"]) {
+  function handlePhoto(type: ShopPhoto["type"]) {
+    pendingType.current = type;
+    inputRef.current?.click();
+  }
+
+  async function handleFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const type = pendingType.current;
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!type || !file) return;
+
+    if (file.size > MAX_FILE_BYTES) {
+      toast.error("File exceeds the 10 MB limit");
+      return;
+    }
+
     setUploading(type);
-    await new Promise((r) => setTimeout(r, 800 + Math.random() * 600));
-    onAddPhoto({
-      id: `photo-${type}-${Date.now()}`,
-      type,
-      fileName: `shop_${type}_${Date.now()}.jpg`,
-      uploadedAt: Date.now(),
-    });
-    setUploading(null);
+    try {
+      const dataBase64 = await fileToBase64(file);
+      const analysis = await submitVerificationFile({
+        data: {
+          merchantRef: verification.merchantRef,
+          shopId: verification.shopId,
+          category: "photo",
+          docType: type,
+          fileName: file.name,
+          mimeType: file.type,
+          dataBase64,
+          form: { businessType: verification.businessType || undefined },
+        },
+      });
+
+      if (analysis.decision === "REJECTED") {
+        toast.error(analysis.issues[0] ?? `${type} photo was rejected — please retake it.`);
+        return;
+      }
+
+      onAddPhoto({
+        id: analysis.docId,
+        type,
+        fileName: analysis.fileName,
+        uploadedAt: analysis.createdAt,
+        filePath: analysis.filePath,
+        analysis,
+      });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Upload failed. Please try again.");
+    } finally {
+      setUploading(null);
+    }
   }
 
   return (
     <div className="space-y-5">
+      <input
+        ref={inputRef}
+        type="file"
+        accept={ACCEPTED_TYPES}
+        className="hidden"
+        onChange={handleFileSelected}
+      />
       <div>
         <h2 className="text-lg font-extrabold">Shop photos & location</h2>
         <p className="mt-1 text-sm text-muted-foreground">
@@ -90,7 +144,9 @@ export function StepShopPhotos({ verification, onUpdateGps, onAddPhoto, onComple
               {locating ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
-                <><MapPin className="mr-1 h-3.5 w-3.5" /> Capture</>
+                <>
+                  <MapPin className="mr-1 h-3.5 w-3.5" /> Capture
+                </>
               )}
             </Button>
           )}
@@ -116,7 +172,8 @@ export function StepShopPhotos({ verification, onUpdateGps, onAddPhoto, onComple
           <Camera className="h-4 w-4 text-primary" /> Shop photos
         </h3>
         <p className="text-xs text-muted-foreground">
-          Front entrance and shop board are required. Interior and selfie are optional but recommended.
+          Front entrance and shop board are required. Interior and selfie are optional but
+          recommended.
         </p>
 
         <div className="grid grid-cols-2 gap-3">

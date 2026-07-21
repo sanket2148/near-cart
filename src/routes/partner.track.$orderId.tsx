@@ -1,16 +1,13 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { ArrowLeft, Navigation2, Radio, Play, Square, ArrowRight, ExternalLink } from "lucide-react";
-import { usePartner } from "@/lib/partner";
-import {
-  useTracking,
-  nextTrackStatus,
-  TRACK_STATUS_LABEL,
-} from "@/lib/tracking";
+import { usePartner, nextJobStatus, JOB_ACTION_LABEL } from "@/lib/partner";
+import { useTracking } from "@/lib/tracking";
 import { geocodeSeed } from "@/lib/geo";
 import { useLiveLocation } from "@/hooks/useLiveLocation";
 import { useDeliverySimulation } from "@/hooks/useDeliverySimulation";
+import { pushPartnerLocation } from "@/lib/tracking-data/api.functions";
 import { LiveTrackView } from "@/components/tracking/LiveTrackView";
 import { Button } from "@/components/ui/button";
 
@@ -18,14 +15,26 @@ export const Route = createFileRoute("/partner/track/$orderId")({
   component: PartnerTrack,
 });
 
+const LOCATION_PUSH_MIN_INTERVAL_MS = 8000;
+
 function PartnerTrack() {
   const { orderId } = Route.useParams();
-  const { jobs, profile } = usePartner();
+  const { jobs, profile, advanceJob } = usePartner();
   const job = jobs.find((j) => j.orderId === orderId);
-  const { ensureSession, getSession, setRiderPosition, setStatus } = useTracking();
+  const { ensureSession, getSession, setRiderPosition } = useTracking();
   const session = getSession(orderId);
+  const lastPushRef = useRef(0);
 
-  const live = useLiveLocation((pos) => setRiderPosition(orderId, pos));
+  const live = useLiveLocation((pos) => {
+    // Cosmetic local echo so this partner's own map updates instantly...
+    setRiderPosition(orderId, pos);
+    // ...and throttled real push so the customer's poll picks it up too.
+    if (!profile.id) return;
+    const now = Date.now();
+    if (now - lastPushRef.current < LOCATION_PUSH_MIN_INTERVAL_MS) return;
+    lastPushRef.current = now;
+    void pushPartnerLocation({ data: { lat: pos.lat, lng: pos.lng } });
+  });
   const sim = useDeliverySimulation(orderId, session);
 
   useEffect(() => {
@@ -50,7 +59,7 @@ function PartnerTrack() {
     );
   }
 
-  const next = session ? nextTrackStatus(session.status) : null;
+  const next = nextJobStatus(job.status);
   const mapsUrl = session
     ? `https://www.google.com/maps/dir/?api=1&origin=${session.pickup.lat},${session.pickup.lng}&destination=${session.drop.lat},${session.drop.lng}&travelmode=driving`
     : "#";
@@ -121,17 +130,19 @@ function PartnerTrack() {
                 </Button>
               </a>
 
-              {/* Advance order status */}
+              {/* Advance order status — this is the real backend action now
+                  (same one JobCard on /partner/deliveries calls), not just a
+                  local tracking-store write. */}
               {next ? (
                 <Button
                   variant="accent"
                   className="w-full"
                   onClick={() => {
-                    setStatus(orderId, next);
-                    toast.success(`Marked ${TRACK_STATUS_LABEL[next]}`);
+                    advanceJob(job.id);
+                    toast.success(JOB_ACTION_LABEL[job.status] ?? "Status updated");
                   }}
                 >
-                  Mark {TRACK_STATUS_LABEL[next]} <ArrowRight className="h-4 w-4" />
+                  {JOB_ACTION_LABEL[job.status]} <ArrowRight className="h-4 w-4" />
                 </Button>
               ) : (
                 <p className="flex items-center justify-center gap-1.5 text-center text-sm font-semibold text-primary">
