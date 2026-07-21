@@ -19,6 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { LiveTrackView } from "@/components/tracking/LiveTrackView";
 import { useTracking } from "@/lib/tracking";
 import { geocodeSeed } from "@/lib/geo";
+import { useDeliverySimulation } from "@/hooks/useDeliverySimulation";
 
 export const Route = createFileRoute("/order/$orderId")({
   head: () => ({ meta: [{ title: "Track Order — NearCart" }] }),
