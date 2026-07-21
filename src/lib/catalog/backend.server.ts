@@ -213,6 +213,29 @@ export async function getNearbyShops(input: NearbyShopsInput): Promise<CatalogSh
   return shops;
 }
 
+// Real shops actually deliver from wherever they are, not from
+// src/lib/data.ts's mock array — src/lib/location.tsx's serviceability gate
+// used to check a location against that static list, which only happened to
+// agree with the real catalog by coincidence and drifted out of sync as real
+// shops were added with their own real coordinates. This is the real check:
+// same "small catalog, JS haversine, no PostGIS" approach as getNearbyShops
+// above, not a duplicate radius constant — SERVICE_RADIUS_KM lives here now,
+// the one place that actually decides serviceability.
+const SERVICE_RADIUS_KM = 5;
+
+export type ServiceabilityResult = { serviceable: boolean; nearestKm: number | null };
+
+export async function checkServiceability(lat: number, lng: number): Promise<ServiceabilityResult> {
+  const { data, error } = await admin().from("shops").select("lat, lng").eq("status", "active");
+  if (error) throw new Error(`checkServiceability failed: ${error.message}`);
+  if (!data || data.length === 0) return { serviceable: false, nearestKm: null };
+
+  const nearestKm = Math.min(
+    ...data.map((row) => haversineKm({ lat, lng }, { lat: Number(row.lat), lng: Number(row.lng) })),
+  );
+  return { serviceable: nearestKm <= SERVICE_RADIUS_KM, nearestKm: Number(nearestKm.toFixed(1)) };
+}
+
 export async function getShop(shopId: string): Promise<CatalogShop | null> {
   const { data, error } = await admin()
     .from("shops")

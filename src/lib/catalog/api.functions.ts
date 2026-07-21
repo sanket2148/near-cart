@@ -23,6 +23,13 @@ export const getNearbyShops = createServerFn({ method: "GET" })
     return be.getNearbyShops(data);
   });
 
+export const checkServiceability = createServerFn({ method: "GET" })
+  .validator(z.object({ lat: z.number(), lng: z.number() }))
+  .handler(async ({ data }) => {
+    const be = await import("./backend.server");
+    return be.checkServiceability(data.lat, data.lng);
+  });
+
 export const getShop = createServerFn({ method: "GET" })
   .validator(z.object({ shopId: z.string().min(1) }))
   .handler(async ({ data }) => {
