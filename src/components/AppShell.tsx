@@ -20,14 +20,22 @@ export function AppShell({
 }) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [locationModalOpen, setLocationModalOpen] = useState(false);
-  const { state } = useLocation();
+  const { state, isHydrated } = useLocation();
 
   // Offer the location prompt once, the first time we don't know where the
-  // customer is — but never block browsing on it. getNearbyShops already
-  // degrades gracefully (all active shops, unsorted) with no coords set.
+  // customer is — but never block browsing on it, and never nag: once
+  // dismissed via "Maybe later" it stays quiet on every later page/nav
+  // (dismissedAt persists across navigations, unlike this component's own
+  // local locationModalOpen state, which resets on every remount). Still
+  // unset by the time it matters is checkout's job to ask again — see
+  // checkout.tsx. getNearbyShops already degrades gracefully (all active
+  // shops, unsorted) with no coords set, so there's never a hard block.
+  // Gated on isHydrated so a fresh full-page load doesn't briefly reopen
+  // this for a user who already dismissed it or set a real location — see
+  // isHydrated's doc comment in location.tsx for why that race exists.
   useEffect(() => {
-    if (state.status === "unset") setLocationModalOpen(true);
-  }, [state.status]);
+    if (isHydrated && state.status === "unset" && !state.dismissedAt) setLocationModalOpen(true);
+  }, [isHydrated, state.status, state.dismissedAt]);
 
   return (
     <div className="flex min-h-screen bg-background w-full">
@@ -42,7 +50,9 @@ export function AppShell({
           onMenuClick={() => setMobileOpen(true)}
           onLocationClick={() => setLocationModalOpen(true)}
         />
-        <main className={cn("mx-auto w-full flex-1 px-4 pb-6 pt-4", wide ? "max-w-6xl" : "max-w-2xl")}>
+        <main
+          className={cn("mx-auto w-full flex-1 px-4 pb-6 pt-4", wide ? "max-w-6xl" : "max-w-2xl")}
+        >
           {children}
         </main>
         {!hideNav && <BottomNav />}

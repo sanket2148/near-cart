@@ -1,10 +1,11 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, MapPin, Wallet, Check, Clock, Zap, Loader2, Tag, X } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { EmailOtpAuth } from "@/components/EmailOtpAuth";
+import { LocationModal } from "@/components/LocationModal";
 import { useCart } from "@/lib/cart";
 import { useAuth } from "@/lib/auth";
 import { useLocation } from "@/lib/location";
@@ -32,7 +33,7 @@ function CheckoutPage() {
   const navigate = useNavigate();
   const { lines, shopId, subtotal, itemCount, clear } = useCart();
   const { user, loading: authLoading } = useAuth();
-  const { state: locationState } = useLocation();
+  const { state: locationState, isHydrated: locationHydrated } = useLocation();
   const { data: shop } = useQuery({
     queryKey: ["shop", shopId],
     queryFn: () => getShop({ data: { shopId: shopId! } }),
@@ -41,6 +42,20 @@ function CheckoutPage() {
 
   const [address, setAddress] = useState("Home · 12, 5th Cross, Koramangala, Bengaluru");
   const [slot, setSlot] = useState<"now" | "later">("now");
+  const [locationModalOpen, setLocationModalOpen] = useState(false);
+
+  // Ask for a real delivery location here even if the earlier app-wide
+  // prompt (AppShell) was dismissed with "Maybe later" — this is the final
+  // step before placing an order, so it's the point location actually
+  // matters (placeOrder falls back to the shop's own coords otherwise,
+  // below). Gated on locationHydrated (see isHydrated's doc comment in
+  // location.tsx) so a fresh full-page load of /checkout doesn't briefly
+  // ask again for a customer who already has a real location saved — not
+  // gated on dismissedAt though, unlike AppShell's prompt, since this one
+  // is meant to ask again regardless of an earlier "Maybe later".
+  useEffect(() => {
+    if (locationHydrated && locationState.status === "unset") setLocationModalOpen(true);
+  }, [locationHydrated, locationState.status]);
   const [payment, setPayment] = useState<(typeof payments)[number]["id"]>("upi");
   const [placing, setPlacing] = useState(false);
   const [couponInput, setCouponInput] = useState("");
@@ -201,6 +216,8 @@ function CheckoutPage() {
 
   return (
     <AppShell subtitle={shop.area} hideNav>
+      <LocationModal open={locationModalOpen} onOpenChange={setLocationModalOpen} />
+
       <Link
         to="/cart"
         className="mb-3 inline-flex items-center gap-1 text-sm font-medium text-muted-foreground"
