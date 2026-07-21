@@ -7,6 +7,7 @@ import ShopDetailsScreen from '../screens/ShopDetailsScreen';
 import CartScreen from '../screens/CartScreen';
 import OrdersScreen from '../screens/OrdersScreen';
 import SettingsScreen from '../screens/SettingsScreen';
+import LoginScreen from '../screens/LoginScreen';
 
 const Tab = createBottomTabNavigator<HomeTabParamList>();
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -66,6 +67,7 @@ export default function RootNavigator() {
       <Stack.Screen name="HomeTabs" component={HomeTabs} />
       <Stack.Screen name="ShopDetails" component={ShopDetailsScreen} />
       <Stack.Screen name="Cart" component={CartScreen} />
+      <Stack.Screen name="Login" component={LoginScreen} options={{ presentation: 'modal' }} />
     </Stack.Navigator>
   );
 }

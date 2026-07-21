@@ -1,24 +1,45 @@
-// Seller-side state for NearCart shop owners. Frontend-first, localStorage mock.
-// Scoped to a SINGLE shop (the logged-in owner's shop) — never references other shops.
+// Seller-side state for NearCart shop owners. Real DB-backed as of Phase D
+// (shop/products/orders) and Phase E (delivery partners) of the backend
+// build-out — SellerProvider keeps exposing the exact same Context shape it
+// always did, so seller.index.tsx/seller.orders.tsx/seller.products.tsx/etc.
+// didn't need to change at all; only the persistence layer underneath did.
+//
+// NOT migrated here (deliberately out of scope):
+//   - Verification wizard state (src/lib/verification.ts) — still
+//     localStorage; only its badge/business-type/overall-status *summary*
+//     is synced to the real shop_verifications row (see updateVerification
+//     below), since that's what real customers see in Phase B's catalog.
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { type Product } from "./data";
 import {
-  createContext,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-  type ReactNode,
-} from "react";
-import { products as seedProducts, shops as seedShops, type Product } from "./data";
-import { type BusinessType, type BadgeTier, type ShopVerification, loadVerification, saveVerification, createEmptyVerification } from "./verification";
+  type BusinessType,
+  type BadgeTier,
+  type ShopVerification,
+  loadVerification,
+  saveVerification,
+} from "./verification";
+import { useAuth } from "./auth";
+import {
+  getMyShop as getMyShopFn,
+  createShop as createShopFn,
+  updateShop as updateShopFn,
+  syncVerificationSummary,
+  getMyProducts as getMyProductsFn,
+  addProduct as addProductFn,
+  updateProduct as updateProductFn,
+  removeProduct as removeProductFn,
+  toggleStock as toggleStockFn,
+  getShopOrders as getShopOrdersFn,
+  acceptOrder as acceptOrderFn,
+  rejectOrder as rejectOrderFn,
+  advanceOrder as advanceOrderFn,
+  getAvailablePartners as getAvailablePartnersFn,
+  offerToPartner as offerToPartnerFn,
+} from "./seller-data/api.functions";
 
 export type SellerOrderStatus =
-  | "new"
-  | "accepted"
-  | "preparing"
-  | "ready"
-  | "out_for_delivery"
-  | "delivered"
-  | "rejected";
+  "new" | "accepted" | "preparing" | "ready" | "out_for_delivery" | "delivered" | "rejected";
 
 export type SellerOrderLine = {
   name: string;
@@ -62,144 +83,36 @@ export type ShopProfile = {
   etaMinutes: number;
   businessType: BusinessType | null;
   badgeTier: BadgeTier;
-  verificationStatus: 'incomplete' | 'pending_review' | 'approved' | 'suspended';
+  verificationStatus: "incomplete" | "pending_review" | "approved" | "suspended";
+  logoUrl?: string;
 };
 
-// ---- Seed (the owner's own shop) ----
-const OWNED_SHOP_ID = "ramesh-stores";
+export type NewShopInput = {
+  name: string;
+  businessType: BusinessType;
+  area: string;
+  tagline?: string;
+};
 
-function seedShopProfile(): ShopProfile {
-  const s = seedShops.find((x) => x.id === OWNED_SHOP_ID)!;
-  return {
-    id: s.id,
-    name: s.name,
-    tagline: s.tagline,
-    emoji: s.emoji,
-    area: s.area,
-    isOpen: s.isOpen,
-    deliveryFee: s.deliveryFee,
-    freeAbove: s.freeAbove,
-    etaMinutes: s.etaMinutes,
-    businessType: "grocery",
-    badgeTier: "none",
-    verificationStatus: "incomplete",
-  };
+/** Whether this account has already created a real shop. */
+export async function hasShop(): Promise<boolean> {
+  const shop = await getMyShopFn();
+  return shop !== null;
 }
 
-function seedShopProducts(): Product[] {
-  return seedProducts.filter((p) => p.shopId === OWNED_SHOP_ID).map((p) => ({ ...p }));
+/** Create a brand-new real shop for this account. Starts empty — no demo products/orders. */
+export async function createShop(input: NewShopInput): Promise<ShopProfile> {
+  return createShopFn({
+    data: {
+      name: input.name,
+      businessType: input.businessType,
+      area: input.area,
+      tagline: input.tagline,
+    },
+  }) as unknown as Promise<ShopProfile>;
 }
 
-const seedPartners: DeliveryPartner[] = [
-  { id: "dp1", name: "Arjun K.", vehicle: "Bike", phone: "+91 90000 11111", rating: 4.8, available: true },
-  { id: "dp2", name: "Suresh M.", vehicle: "Scooter", phone: "+91 90000 22222", rating: 4.6, available: true },
-  { id: "dp3", name: "Imran S.", vehicle: "Bike", phone: "+91 90000 33333", rating: 4.9, available: false },
-];
-
-const HOUR = 60 * 60 * 1000;
 const MIN = 60 * 1000;
-
-function seedOrders(): SellerOrder[] {
-  const now = Date.now();
-  return [
-    {
-      id: "NC50231881",
-      customerName: "Priya Sharma",
-      address: "402, Lake View Apartments, Koramangala 5th Block",
-      phone: "+91 98800 12345",
-      lines: [
-        { name: "Aashirvaad Atta 5kg", emoji: "🌾", price: 280, unit: "5 kg", quantity: 1 },
-        { name: "Amul Gold Milk", emoji: "🥛", price: 34, unit: "500 ml", quantity: 2 },
-        { name: "Tata Salt", emoji: "🧂", price: 28, unit: "1 kg", quantity: 1 },
-      ],
-      total: 376,
-      paymentMethod: "UPI",
-      placedAt: now - 3 * MIN,
-      status: "new",
-    },
-    {
-      id: "NC50231754",
-      customerName: "Rahul Verma",
-      address: "12, MG Road, Near Forum Mall",
-      phone: "+91 98800 67890",
-      lines: [
-        { name: "Maggi Noodles", emoji: "🍜", price: 60, unit: "Pack of 4", quantity: 2 },
-        { name: "Farm Eggs", emoji: "🥚", price: 84, unit: "Tray of 12", quantity: 1 },
-      ],
-      total: 204,
-      paymentMethod: "COD",
-      placedAt: now - 12 * MIN,
-      status: "new",
-    },
-    {
-      id: "NC50231602",
-      customerName: "Anita Desai",
-      address: "78, Jyoti Nagar, Koramangala 1st Block",
-      phone: "+91 98800 24680",
-      lines: [
-        { name: "Fortune Sunflower Oil", emoji: "🛢️", price: 145, unit: "1 L", quantity: 2 },
-        { name: "Toor Dal", emoji: "🫘", price: 150, unit: "1 kg", quantity: 1 },
-      ],
-      total: 440,
-      paymentMethod: "UPI",
-      placedAt: now - 40 * MIN,
-      status: "preparing",
-    },
-    {
-      id: "NC50231411",
-      customerName: "Vikram Singh",
-      address: "5, Rose Garden Road, Koramangala 6th Block",
-      phone: "+91 98800 13579",
-      lines: [{ name: "Aashirvaad Atta 5kg", emoji: "🌾", price: 280, unit: "5 kg", quantity: 1 }],
-      total: 280,
-      paymentMethod: "COD",
-      placedAt: now - 70 * MIN,
-      status: "out_for_delivery",
-      partnerId: "dp1",
-    },
-    {
-      id: "NC50230988",
-      customerName: "Meena Iyer",
-      address: "23, Silver Heights, Koramangala 4th Block",
-      phone: "+91 98800 11223",
-      lines: [
-        { name: "Amul Gold Milk", emoji: "🥛", price: 34, unit: "500 ml", quantity: 4 },
-        { name: "Maggi Noodles", emoji: "🍜", price: 60, unit: "Pack of 4", quantity: 1 },
-      ],
-      total: 196,
-      paymentMethod: "UPI",
-      placedAt: now - 2 * HOUR,
-      status: "delivered",
-      partnerId: "dp2",
-    },
-  ];
-}
-
-// ---- Persistence ----
-const KEYS = {
-  shop: "nearcart-seller-shop",
-  products: "nearcart-seller-products",
-  orders: "nearcart-seller-orders",
-};
-
-function load<T>(key: string, fallback: T): T {
-  try {
-    if (typeof window === "undefined") return fallback;
-    const raw = localStorage.getItem(key);
-    return raw ? (JSON.parse(raw) as T) : fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-function save<T>(key: string, value: T) {
-  try {
-    if (typeof window === "undefined") return;
-    localStorage.setItem(key, JSON.stringify(value));
-  } catch {
-    /* ignore */
-  }
-}
 
 // ---- Status helpers ----
 export const ORDER_FLOW: SellerOrderStatus[] = [
@@ -265,53 +178,60 @@ type SellerContextValue = {
 const SellerContext = createContext<SellerContextValue | null>(null);
 
 export function SellerProvider({ children }: { children: ReactNode }) {
-  const [shop, setShop] = useState<ShopProfile>(seedShopProfile);
-  const [products, setProducts] = useState<Product[]>(seedShopProducts);
-  const [orders, setOrders] = useState<SellerOrder[]>(seedOrders);
-  const [partners] = useState<DeliveryPartner[]>(seedPartners);
-  const [verification, setVerification] = useState<ShopVerification>(() => createEmptyVerification(OWNED_SHOP_ID));
-  const [hydrated, setHydrated] = useState(false);
+  const { user } = useAuth();
+  const userId = user?.id ?? "";
+  const queryClient = useQueryClient();
 
-  // Hydrate from localStorage after mount (avoids SSR mismatch).
-  useEffect(() => {
-    setShop(load(KEYS.shop, seedShopProfile()));
-    setProducts(load(KEYS.products, seedShopProducts()));
-    setOrders(load(KEYS.orders, seedOrders()));
-    setVerification(loadVerification(OWNED_SHOP_ID));
-    setHydrated(true);
-  }, []);
+  const { data: shop } = useQuery({
+    queryKey: ["my-shop", userId],
+    queryFn: () => getMyShopFn(),
+    enabled: Boolean(userId),
+  });
 
-  useEffect(() => {
-    if (hydrated) save(KEYS.shop, shop);
-  }, [shop, hydrated]);
-  useEffect(() => {
-    if (hydrated) save(KEYS.products, products);
-  }, [products, hydrated]);
-  useEffect(() => {
-    if (hydrated) save(KEYS.orders, orders);
-  }, [orders, hydrated]);
-  useEffect(() => {
-    if (hydrated) saveVerification(verification);
-  }, [verification, hydrated]);
+  const { data: products = [] } = useQuery({
+    queryKey: ["my-products", shop?.id],
+    queryFn: () => getMyProductsFn({ data: { shopId: shop!.id } }),
+    enabled: Boolean(shop),
+  });
 
-  // Force shop to remain closed if it is not fully verified/approved
-  useEffect(() => {
-    if (hydrated && verification.overallStatus !== "approved" && shop.isOpen) {
-      setShop((s) => ({ ...s, isOpen: false }));
-    }
-  }, [verification.overallStatus, hydrated, shop.isOpen]);
+  const { data: orders = [] } = useQuery({
+    queryKey: ["shop-orders", shop?.id],
+    queryFn: () =>
+      getShopOrdersFn({ data: { shopId: shop!.id } }) as unknown as Promise<SellerOrder[]>,
+    enabled: Boolean(shop),
+    // No websocket Realtime yet (see plan/tasks/decisions.md, Phase H) — the
+    // browser holds no real Supabase session, so RLS-gated postgres_changes
+    // isn't reachable from the anon key. Poll so new customer orders and
+    // partner-side status changes show up without a manual refresh.
+    refetchInterval: 6000,
+  });
 
-  const value = useMemo<SellerContextValue>(() => {
-    const updateOrder = (id: string, patch: Partial<SellerOrder>) =>
-      setOrders((prev) => prev.map((o) => (o.id === id ? { ...o, ...patch } : o)));
+  const { data: partners = [] } = useQuery({
+    queryKey: ["available-partners"],
+    queryFn: () => getAvailablePartnersFn() as unknown as Promise<DeliveryPartner[]>,
+    enabled: Boolean(shop),
+  });
+
+  // Verification wizard progress is still localStorage (see file header).
+  const [verification, setVerification] = useState<ShopVerification | null>(null);
+  useEffect(() => {
+    if (shop) setVerification(loadVerification(shop.id));
+  }, [shop]);
+
+  const invalidateShop = () => queryClient.invalidateQueries({ queryKey: ["my-shop", userId] });
+  const invalidateProducts = () =>
+    queryClient.invalidateQueries({ queryKey: ["my-products", shop?.id] });
+  const invalidateOrders = () =>
+    queryClient.invalidateQueries({ queryKey: ["shop-orders", shop?.id] });
+
+  const value = useMemo<SellerContextValue | null>(() => {
+    if (!shop || !verification) return null;
 
     const stats = {
       newCount: orders.filter((o) => o.status === "new").length,
-      activeCount: orders.filter(
-        (o) => !["new", "delivered", "rejected"].includes(o.status),
-      ).length,
-      deliveredToday: orders.filter((o) => o.status === "delivered" && isToday(o.placedAt))
+      activeCount: orders.filter((o) => !["new", "delivered", "rejected"].includes(o.status))
         .length,
+      deliveredToday: orders.filter((o) => o.status === "delivered" && isToday(o.placedAt)).length,
       revenueToday: orders
         .filter((o) => o.status === "delivered" && isToday(o.placedAt))
         .reduce((sum, o) => sum + o.total, 0),
@@ -326,41 +246,72 @@ export function SellerProvider({ children }: { children: ReactNode }) {
       verification,
       updateVerification: (v) => {
         setVerification(v);
-        setShop((s) => ({
-          ...s,
-          businessType: v.businessType,
-          badgeTier: v.currentBadge,
-          verificationStatus: v.overallStatus,
-          isOpen: v.overallStatus === "approved" ? s.isOpen : false,
-        }));
+        saveVerification(v);
+        const isOpen = v.overallStatus === "approved" ? shop.isOpen : false;
+        void updateShopFn({ data: { shopId: shop.id, patch: { isOpen } } }).then(invalidateShop);
+        void syncVerificationSummary({
+          data: {
+            shopId: shop.id,
+            summary: {
+              businessType: v.businessType,
+              badgeTier: v.currentBadge,
+              overallStatus: v.overallStatus,
+              levels: {
+                l1Phone: v.levels.l1_contact.phoneStatus,
+                l1Email: v.levels.l1_contact.emailStatus,
+                l2Documents: v.levels.l2_documents.status,
+                l3Kyc: v.levels.l3_kyc.status,
+                l4Bank: v.levels.l4_bank.status,
+                l5Gps: v.levels.l5_gps.status,
+                l6Ai: v.levels.l6_ai.status,
+                l7Review: v.levels.l7_review.status,
+              },
+            },
+          },
+        }).then(invalidateShop);
       },
-      updateShop: (patch) => setShop((s) => ({ ...s, ...patch })),
-      addProduct: (p) =>
-        setProducts((prev) => [
-          { ...p, id: "sp" + Date.now().toString().slice(-6), shopId: OWNED_SHOP_ID },
-          ...prev,
-        ]),
-      updateProduct: (id, patch) =>
-        setProducts((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p))),
-      removeProduct: (id) => setProducts((prev) => prev.filter((p) => p.id !== id)),
-      toggleStock: (id) =>
-        setProducts((prev) =>
-          prev.map((p) => (p.id === id ? { ...p, inStock: !p.inStock } : p)),
-        ),
-      acceptOrder: (id) => updateOrder(id, { status: "accepted" }),
-      rejectOrder: (id) => updateOrder(id, { status: "rejected" }),
-      advanceOrder: (id) =>
-        setOrders((prev) =>
-          prev.map((o) => {
-            if (o.id !== id) return o;
-            const next = o.status === "new" ? "accepted" : nextStatus(o.status);
-            return next ? { ...o, status: next } : o;
-          }),
-        ),
-      assignPartner: (orderId, partnerId) => updateOrder(orderId, { partnerId }),
+      updateShop: (patch) => {
+        void updateShopFn({ data: { shopId: shop.id, patch } }).then(invalidateShop);
+      },
+      addProduct: (p) => {
+        void addProductFn({ data: { shopId: shop.id, input: p } }).then(invalidateProducts);
+      },
+      updateProduct: (id, patch) => {
+        void updateProductFn({ data: { productId: id, patch } }).then(invalidateProducts);
+      },
+      removeProduct: (id) => {
+        void removeProductFn({ data: { productId: id } }).then(invalidateProducts);
+      },
+      toggleStock: (id) => {
+        void toggleStockFn({ data: { productId: id } }).then(invalidateProducts);
+      },
+      acceptOrder: (id) => {
+        void acceptOrderFn({ data: { orderId: id } }).then(invalidateOrders);
+      },
+      rejectOrder: (id) => {
+        void rejectOrderFn({ data: { orderId: id } }).then(invalidateOrders);
+      },
+      advanceOrder: (id) => {
+        void advanceOrderFn({ data: { orderId: id } }).then(invalidateOrders);
+      },
+      assignPartner: (orderId, partnerId) => {
+        void offerToPartnerFn({ data: { orderId, partnerId } }).then(invalidateOrders);
+      },
       stats,
     };
+    // invalidate* helpers intentionally excluded — they're plain closures
+    // over queryClient/userId/shop?.id, not memoized; including them would
+    // make this useMemo recompute every render, defeating its purpose.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shop, products, orders, partners, verification]);
+
+  if (!value) {
+    return (
+      <div className="flex min-h-screen items-center justify-center text-muted-foreground">
+        Loading your shop…
+      </div>
+    );
+  }
 
   return <SellerContext.Provider value={value}>{children}</SellerContext.Provider>;
 }

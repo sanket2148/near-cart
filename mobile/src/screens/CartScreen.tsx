@@ -1,56 +1,54 @@
-import { StyleSheet, Text, View, FlatList, Pressable, Alert } from 'react-native';
+import { useState } from 'react';
+import { StyleSheet, Text, View, FlatList, Pressable, Alert, ActivityIndicator } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { ArrowLeft, ShoppingCart, Trash2 } from 'lucide-react-native';
 import { RootStackNavigationProp } from '../navigation/types';
 import { useCart } from '@/lib/cart';
-import { getShop } from '@/lib/data';
-import { saveOrder, newOrderId, buildLines } from '@/lib/orders';
+import { useAuth } from '../lib/auth';
+import { getShop } from '../lib/catalog';
+import { placeOrder } from '../lib/orders';
 
 export default function CartScreen() {
   const navigation = useNavigation<RootStackNavigationProp<'Cart'>>();
   const { lines, subtotal, clear, setQty, itemCount, shopId } = useCart();
+  const { user } = useAuth();
+  const [placing, setPlacing] = useState(false);
 
-  const handleCheckout = () => {
+  const handleCheckout = async () => {
     if (!shopId) return;
-    const shop = getShop(shopId);
-    if (!shop) return;
+    if (!user) {
+      navigation.navigate('Login');
+      return;
+    }
 
-    const deliveryFee = subtotal >= shop.freeAbove ? 0 : shop.deliveryFee;
-    const handling = 9;
-    const total = subtotal + deliveryFee + handling;
+    setPlacing(true);
+    try {
+      const shop = await getShop(shopId);
+      if (!shop) throw new Error('Shop not found');
 
-    const orderId = newOrderId();
+      const order = await placeOrder({
+        shopId: shop.id,
+        items: lines.map((l) => ({ productId: l.product.id, quantity: l.quantity })),
+        paymentMethod: 'cod',
+        addressText: 'Home · 12, 5th Cross, Koramangala, Bengaluru',
+        lat: shop.lat,
+        lng: shop.lng,
+      });
 
-    saveOrder({
-      id: orderId,
-      shopId: shop.id,
-      shopName: shop.name,
-      shopEmoji: shop.emoji,
-      lines: buildLines(lines),
-      subtotal,
-      deliveryFee,
-      handling,
-      total,
-      paymentMethod: "Cash on Delivery",
-      address: "Home · 12, 5th Cross, Koramangala, Bengaluru",
-      etaMinutes: shop.etaMinutes,
-      placedAt: Date.now(),
-      status: "placed",
-    });
-
-    Alert.alert(
-      "Order Placed 🎉",
-      `Thank you for shopping! Your order #${orderId} is being processed.`,
-      [
+      Alert.alert('Order Placed 🎉', `Thank you for shopping! Your order #${order.id.slice(-6)} is being processed.`, [
         {
-          text: "OK",
+          text: 'OK',
           onPress: () => {
             clear();
             navigation.navigate('HomeTabs', { screen: 'Orders' });
-          }
-        }
-      ]
-    );
+          },
+        },
+      ]);
+    } catch (err) {
+      Alert.alert('Could not place order', err instanceof Error ? err.message : 'Please try again.');
+    } finally {
+      setPlacing(false);
+    }
   };
 
   return (
@@ -127,8 +125,12 @@ export default function CartScreen() {
               <Text style={styles.totalValue}>₹{subtotal}</Text>
             </View>
 
-            <Pressable onPress={handleCheckout} style={styles.checkoutBtn}>
-              <Text style={styles.checkoutBtnText}>Place Order (COD)</Text>
+            <Pressable onPress={handleCheckout} disabled={placing} style={[styles.checkoutBtn, placing && styles.checkoutBtnDisabled]}>
+              {placing ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={styles.checkoutBtnText}>{user ? 'Place Order (COD)' : 'Log in to Place Order'}</Text>
+              )}
             </Pressable>
           </View>
         </View>
@@ -316,6 +318,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#259F56',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  checkoutBtnDisabled: {
+    opacity: 0.6,
   },
   checkoutBtnText: {
     color: '#FFFFFF',

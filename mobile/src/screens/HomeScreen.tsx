@@ -1,9 +1,10 @@
-import { useState } from 'react';
-import { StyleSheet, Text, View, FlatList, Pressable, TextInput, ScrollView, SafeAreaView } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useState, useCallback } from 'react';
+import { StyleSheet, Text, View, FlatList, Pressable, TextInput, ScrollView, ActivityIndicator, RefreshControl } from 'react-native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { MapPin, Search, ChevronRight } from 'lucide-react-native';
 import { HomeTabNavigationProp } from '../navigation/types';
-import { shops, categories } from '@/lib/data';
+import { getShops, getCategories } from '../lib/catalog';
+import type { Shop, Category } from '@/lib/data';
 
 const categoryEmojis: Record<string, string> = {
   grocery: '🛒',
@@ -18,14 +19,47 @@ export default function HomeScreen() {
   const navigation = useNavigation<HomeTabNavigationProp<'Home'>>();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  const [shops, setShops] = useState<Shop[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const load = useCallback(async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true);
+    else setLoading(true);
+    try {
+      const [shopRows, categoryRows] = await Promise.all([getShops(), getCategories()]);
+      setShops(shopRows);
+      setCategories(categoryRows);
+    } catch (err) {
+      console.warn('Failed to load catalog:', err);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load]),
+  );
 
   // Filter shops based on search query and active category
   const filteredShops = shops.filter((shop) => {
-    const matchesSearch = shop.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    const matchesSearch = shop.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           shop.area.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCategory = !activeCategory || shop.category === activeCategory;
     return matchesSearch && matchesCategory;
   });
+
+  if (loading) {
+    return (
+      <View style={[styles.container, styles.loadingContainer]}>
+        <ActivityIndicator color="#259F56" />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -118,6 +152,7 @@ export default function HomeScreen() {
         }
         contentContainerStyle={styles.listContainer}
         style={styles.list}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} tintColor="#259F56" />}
       />
     </View>
   );
@@ -128,6 +163,10 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FBFCF8',
     paddingTop: 10,
+  },
+  loadingContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   header: {
     flexDirection: 'row',

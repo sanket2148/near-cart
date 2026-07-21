@@ -49,6 +49,31 @@ function admin(): SupabaseClient {
   return _admin;
 }
 
+// ─── Ownership check (Phase 6 of the authorization-hardening plan, 2026-07-19) ─
+// This whole module used to be keyed purely by `merchantRef` — a random
+// client-generated UUID (src/lib/verification.ts's genMerchantRef()) with NO
+// stored link to a real shop or owner anywhere. Any caller who knew or
+// guessed a merchantRef could read another merchant's PAN/Aadhaar/GST/bank
+// documents (via getSubmission/getSignedFileUrl) or inject fraudulent
+// documents into another merchant's in-progress verification (via
+// analyzeFile/finalizeSubmission) — the highest-severity gap in the whole
+// authorization-hardening plan, done last on purpose once the ownership-check
+// pattern was proven across orders/tracking-data, admin-data, seller-data,
+// and partner-data. `callerId` must always be the session-derived
+// context.uid. See plan/tasks/decisions.md.
+
+class OwnershipError extends Error {}
+
+async function assertShopOwner(shopId: string, callerId: string): Promise<void> {
+  const { data, error } = await admin()
+    .from("shops")
+    .select("owner_id")
+    .eq("id", shopId)
+    .maybeSingle();
+  if (error) throw new Error(`Ownership check failed: ${error.message}`);
+  if (!data || data.owner_id !== callerId) throw new OwnershipError("This isn't your shop.");
+}
+
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 function genDocId(): string {
@@ -164,7 +189,10 @@ async function visionAnalyze(
     ? { type: "image_url", image_url: { url: `data:${mime};base64,${base64}` } }
     : {
         type: "file",
-        file: { filename: `document.${extFromMime(mime)}`, file_data: `data:${mime};base64,${base64}` },
+        file: {
+          filename: `document.${extFromMime(mime)}`,
+          file_data: `data:${mime};base64,${base64}`,
+        },
       };
 
   const prompt =
@@ -267,7 +295,10 @@ function decide(input: {
 async function audit(merchantRef: string, action: string, detail: unknown): Promise<void> {
   await admin()
     .from("events")
-    .insert({ name: "mv.audit", props: { merchantRef, action, detail, at: new Date().toISOString() } });
+    .insert({
+      name: "mv.audit",
+      props: { merchantRef, action, detail, at: new Date().toISOString() },
+    });
 }
 
 async function findDuplicate(
@@ -306,6 +337,8 @@ async function storeFile(
 
 export type AnalyzeInput = {
   merchantRef: string;
+  shopId: string;
+  callerId: string;
   category: "document" | "photo";
   docType: string;
   fileName: string;
@@ -315,7 +348,9 @@ export type AnalyzeInput = {
 };
 
 export async function analyzeFile(input: AnalyzeInput): Promise<FileAnalysis> {
-  const { merchantRef, category, docType, fileName, mimeType, dataBase64, form } = input;
+  const { merchantRef, shopId, callerId, category, docType, fileName, mimeType, dataBase64, form } =
+    input;
+  await assertShopOwner(shopId, callerId);
 
   // 1. Server-side validation
   if (!ALLOWED_MIME.includes(mimeType)) {
@@ -329,7 +364,12 @@ export async function analyzeFile(input: AnalyzeInput): Promise<FileAnalysis> {
   const docId = genDocId();
   const ext = extFromMime(mimeType);
 
-  await audit(merchantRef, "file.received", { docType, category, sizeBytes: buffer.length, mimeType });
+  await audit(merchantRef, "file.received", {
+    docType,
+    category,
+    sizeBytes: buffer.length,
+    mimeType,
+  });
 
   // 2. Duplicate detection (global — same bytes uploaded by any other merchant)
   const dup = await findDuplicate(sha256, merchantRef);
@@ -342,7 +382,12 @@ export async function analyzeFile(input: AnalyzeInput): Promise<FileAnalysis> {
     vision = {
       ocrText: "",
       extractedFields: {},
-      quality: { score: 0.4, legible: false, blurry: true, issues: ["Automated analysis unavailable"] },
+      quality: {
+        score: 0.4,
+        legible: false,
+        blurry: true,
+        issues: ["Automated analysis unavailable"],
+      },
       authenticity: { looksGenuine: true, score: 0.5, concerns: [] },
       documentTypeMatch: true,
     };
@@ -356,7 +401,7 @@ export async function analyzeFile(input: AnalyzeInput): Promise<FileAnalysis> {
       : compareWithForm(vision.extractedFields, form || {});
 
   // 5. Confidence + decision
-  const { confidence, decision } = decide({
+  let { confidence, decision } = decide({
     quality: vision.quality.score,
     authenticity: vision.authenticity.score,
     matchScore: cmp.matchScore,
@@ -373,6 +418,47 @@ export async function analyzeFile(input: AnalyzeInput): Promise<FileAnalysis> {
   if (cmp.matchScore < 0.4 && category === "document")
     issues.push("Business details on the document do not match your registration.");
   issues.push(...vision.quality.issues, ...vision.authenticity.concerns);
+
+  // 5.5. Real government-registry cross-check (gst/fssai/pan only, and only
+  // when configured — see src/lib/doc-verify/backend.server.ts). This is a
+  // stronger signal than OCR alone: it confirms the number ON the document
+  // actually exists and is active, not just that the image looks plausible.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let registryCheck: any;
+  if (category === "document") {
+    const docVerify = await import("@/lib/doc-verify/backend.server");
+    if (docVerify.isConfigured() && docVerify.isSupportedDocType(docType)) {
+      const number = docVerify.pickRegistryNumber(docType, vision.extractedFields);
+      if (number) {
+        try {
+          registryCheck = await docVerify.verifyByDocType(docType, number, form?.businessName);
+          if (!registryCheck.verified) {
+            decision = "REJECTED";
+            confidence = Math.min(confidence, 0.15);
+            issues.push(
+              `Could not verify this ${docType.toUpperCase()} number against the official registry${registryCheck.status ? ` (status: ${registryCheck.status})` : ""}.`,
+            );
+          } else if (
+            decision === "UNDER_REVIEW" &&
+            (registryCheck.nameMatchScore == null || registryCheck.nameMatchScore >= 0.5)
+          ) {
+            // A confirmed-active registry hit is stronger evidence than
+            // borderline OCR quality/authenticity scores — but never
+            // upgrades past what decide() already gated on duplicate/type-match.
+            decision = "VERIFIED";
+            confidence = Math.max(confidence, 0.8);
+          }
+        } catch (err) {
+          // Registry lookup failing (network, rate limit, etc.) must never
+          // block the pipeline — fall back to the OCR-only decision.
+          await audit(merchantRef, "registry.error", {
+            docType,
+            message: String(err).slice(0, 300),
+          });
+        }
+      }
+    }
+  }
 
   // 6. Store the file securely (private bucket). Non-fatal: if storage rejects
   // the credentials, still return the analysis so the pipeline stays usable.
@@ -404,11 +490,22 @@ export async function analyzeFile(input: AnalyzeInput): Promise<FileAnalysis> {
     matchDetails: cmp.details,
     issues: Array.from(new Set(issues)).slice(0, 12),
     createdAt: Date.now(),
+    registryCheck,
   };
 
-  // 7. Persist the document record + audit entry
-  await admin().from("events").insert({ name: "mv.document", props: { merchantRef, ...analysis } });
-  await audit(merchantRef, "file.analyzed", { docId, decision, confidence, duplicate: dup.duplicate });
+  // 7. Persist the document record + audit entry — shopId stored alongside
+  // merchantRef so getSubmission/getSignedFileUrl can verify the real
+  // ownership-checked shop this document actually belongs to, not just trust
+  // whatever merchantRef a caller supplies.
+  await admin()
+    .from("events")
+    .insert({ name: "mv.document", props: { merchantRef, shopId, ...analysis } });
+  await audit(merchantRef, "file.analyzed", {
+    docId,
+    decision,
+    confidence,
+    duplicate: dup.duplicate,
+  });
 
   return analysis;
 }
@@ -424,12 +521,25 @@ export type SubmissionView = {
   } | null;
 };
 
-export async function getSubmission(merchantRef: string): Promise<SubmissionView> {
+/**
+ * `callerId` must be the session-derived context.uid — verifies the caller
+ * owns `shopId` before returning anything, and additionally filters by
+ * `props->>shopId` (not just merchantRef) so a merchantRef alone is never
+ * sufficient to read another shop's documents even if one leaked.
+ */
+export async function getSubmission(
+  merchantRef: string,
+  shopId: string,
+  callerId: string,
+): Promise<SubmissionView> {
+  await assertShopOwner(shopId, callerId);
+
   const { data: docRows } = await admin()
     .from("events")
     .select("props, created_at")
     .eq("name", "mv.document")
     .eq("props->>merchantRef", merchantRef)
+    .eq("props->>shopId", shopId)
     .order("created_at", { ascending: true });
 
   const { data: subRows } = await admin()
@@ -437,6 +547,7 @@ export async function getSubmission(merchantRef: string): Promise<SubmissionView
     .select("props")
     .eq("name", "mv.submission")
     .eq("props->>merchantRef", merchantRef)
+    .eq("props->>shopId", shopId)
     .order("created_at", { ascending: false })
     .limit(1);
 
@@ -448,7 +559,12 @@ export async function getSubmission(merchantRef: string): Promise<SubmissionView
   }
 
   const sub = subRows?.[0]?.props as
-    | { overallDecision: VerificationDecision; overallConfidence: number; documentCount: number; updatedAt: number }
+    | {
+        overallDecision: VerificationDecision;
+        overallConfidence: number;
+        documentCount: number;
+        updatedAt: number;
+      }
     | undefined;
 
   return {
@@ -467,9 +583,13 @@ export async function getSubmission(merchantRef: string): Promise<SubmissionView
 
 export async function finalizeSubmission(
   merchantRef: string,
+  shopId: string,
+  callerId: string,
   form?: VerificationForm,
 ): Promise<SubmissionView["overall"]> {
-  const { documents } = await getSubmission(merchantRef);
+  // assertShopOwner runs again inside getSubmission — cheap, and keeps this
+  // function correct on its own even if called without going through it.
+  const { documents } = await getSubmission(merchantRef, shopId, callerId);
 
   const avg =
     documents.length > 0
@@ -485,6 +605,7 @@ export async function finalizeSubmission(
 
   const record = {
     merchantRef,
+    shopId,
     overallDecision,
     overallConfidence: Number(avg.toFixed(3)),
     documentCount: documents.length,
@@ -507,7 +628,32 @@ export async function finalizeSubmission(
   };
 }
 
-export async function getSignedFileUrl(path: string): Promise<{ url: string }> {
+/**
+ * `callerId` must be the session-derived context.uid. `path` looks like
+ * `${merchantRef}/${category}/${docId}.${ext}` (see storeFile below) — the
+ * merchantRef is extracted from it and cross-checked against a real
+ * `mv.document` event tagged with this ownership-verified shopId, so a
+ * caller can't request a signed URL for a path belonging to a document they
+ * never actually own, even if they can guess/construct the path string.
+ */
+export async function getSignedFileUrl(
+  path: string,
+  shopId: string,
+  callerId: string,
+): Promise<{ url: string }> {
+  await assertShopOwner(shopId, callerId);
+
+  const merchantRef = path.split("/")[0];
+  const { data: owned } = await admin()
+    .from("events")
+    .select("id")
+    .eq("name", "mv.document")
+    .eq("props->>merchantRef", merchantRef)
+    .eq("props->>shopId", shopId)
+    .limit(1)
+    .maybeSingle();
+  if (!owned) throw new OwnershipError("This file isn't yours.");
+
   const { data, error } = await admin().storage.from(BUCKET).createSignedUrl(path, 3600);
   if (error) throw new Error(`Signed URL failed: ${error.message}`);
   return { url: data.signedUrl };

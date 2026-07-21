@@ -6,6 +6,19 @@
 
 ---
 
+## 0. Implementation reality (added 2026-07-17)
+
+This schema was applied for real across four migrations, live in the Supabase project — `supabase/migrations/0001_initial_schema.sql` through `0004_geo_autofill_trigger.sql`. §3–§5 below are the *original* design; this section notes where the applied reality differs or extends it. Full narrative for each is in `plan/tasks/decisions.md` (search for "Phase A", "Phase B (catalog migration)", "Phase G", "2026-07-15 — Verification pipeline migration").
+
+- **0002_fix_orders_assignments_rls_recursion.sql** — `orders_partner_read` and `assignments_shop_read` RLS policies originally cross-referenced each other as normal (non-bypassing) table queries, which Postgres detects and blocks as a recursive policy cycle. Fixed with `SECURITY DEFINER` helper functions (`is_order_partner()`, `is_order_shop_owner()`), mirroring the existing `has_role()` pattern. This affected real customers/shops/partners, not just anon — found via live-DB testing, not `tsc`/lint.
+- **0003_catalog_display_fields.sql** — added `shops.tagline`/`emoji`/`delivery_fee_amount`/`free_delivery_above_amount`/`eta_minutes` and `products.emoji`/`menu_section`. The original §3 tables below don't have these; the real customer-facing catalog UI needed them and they were added rather than dropping UI fidelity to match the doc.
+- **0004_geo_autofill_trigger.sql** — `location geography(Point,4326)` (§2's "Geo" convention) was never being populated from `lat`/`lng` by any application code; added a trigger (`set_location_from_latlng()`) so it derives automatically on `shops`/`addresses`/`gps_verifications`/`partner_locations` inserts/updates, instead of requiring every write path to remember to set both.
+- **`kyc_documents`, `bank_verifications`, `gps_verifications`, `shop_photos`, `fraud_flags` (§3) are still unused.** The verification wizard's document/photo/bank/GPS *detail* stays in `localStorage` (`src/lib/verification.ts`) and, for uploaded files specifically, in the generic `events` table (`mv.document`/`mv.submission` rows) rather than these purpose-built tables — a known, explicitly-tracked gap, not an oversight. What *does* sync for real: `shop_verifications`' roll-up columns (`business_type`, `current_badge`, `overall_status`, `flagged`, `flag_reasons`, and — as of 2026-07-15 — the 8 per-level status columns `l1_phone`..`l7_review`).
+- **`payments`, `refunds`, `partner_locations`, `assignments` are real and in active use** — `payments` backs the scaffolded (not yet live) Razorpay integration; `partner_locations` backs real GPS tracking (partner writes via a service-role server function, not direct RLS-authorized client writes — see below); `assignments` backs real seller→partner dispatch (offer → accept → pickup → deliver).
+- **RLS note that matters for anyone building client-side Realtime:** every RLS policy in §5 assumes `auth.uid()` resolves to a real, signed-in Supabase Auth user. It doesn't yet — the app's actual auth session is a custom `localStorage` object (see `plan/02-api-contracts.md` §0), so the browser never carries a real Supabase JWT. This is why every real DB write in this app goes through a service-role server function rather than a direct RLS-authorized client write, even for tables whose RLS policy would otherwise allow it (e.g. `partner_locations_owner_all`) — and why `postgres_changes` Realtime isn't usable from the browser yet either.
+
+---
+
 ## 1. ER overview
 
 ```text
@@ -45,10 +58,13 @@ shops ──< payouts
 
 ### 3.1 Identity & roles
 
+> **2026-07-12 — Auth is Supabase Auth (phone OTP), not custom.** See `plan/tasks/decisions.md`. Supabase's own `auth.users` table holds identity + owns OTP verification/sessions — `otp_codes` below is dropped, it's no longer needed. `public.users.id` is the *same* UUID as `auth.users.id` (not a separate FK), populated by an upsert-on-first-login server function rather than a signup endpoint. This is also why the RLS policies in §5 use `auth.uid()` directly — that only resolves to a real value when Supabase Auth issued the session.
+
 ```sql
--- users: one row per phone number, any role
+-- users: profile data Supabase's own auth.users doesn't hold.
+-- id is NOT generated here — it's copied from auth.users.id on first login.
 create table users (
-  id           uuid primary key default gen_random_uuid(),
+  id           uuid primary key references auth.users(id) on delete cascade,
   phone        text unique not null,
   full_name    text,
   email        text,
@@ -63,15 +79,6 @@ create table user_roles (
   user_id   uuid not null references users(id) on delete cascade,
   role      app_role not null,
   unique (user_id, role)
-);
-
-create table otp_codes (
-  id          uuid primary key default gen_random_uuid(),
-  phone       text not null,
-  code_hash   text not null,
-  expires_at  timestamptz not null,
-  consumed_at timestamptz,
-  created_at  timestamptz default now()
 );
 
 create type kyc_status as enum ('pending','submitted','verified','rejected');
@@ -95,6 +102,11 @@ create type business_type as enum (
 
 create type badge_tier as enum ('none', 'basic', 'verified', 'premium', 'trusted');
 create type verification_level_status as enum ('not_started', 'in_progress', 'submitted', 'verified', 'rejected');
+
+-- NOTE (2026-07-12): the shipped pipeline (src/lib/verification/backend.server.ts)
+-- currently writes to a generic `events` table instead of the tables below —
+-- see plan/tasks/decisions.md 2026-07-09/07-10. Part of the backend build-out
+-- is migrating it onto these tables now that the service-role key actually works.
 
 -- Shop verification tracking
 create table shop_verifications (

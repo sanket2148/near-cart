@@ -1,8 +1,10 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Minus, Plus, Trash2 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { useCart } from "@/lib/cart";
-import { getShop, formatINR } from "@/lib/data";
+import { formatINR } from "@/lib/data";
+import { getShop } from "@/lib/catalog/api.functions";
 import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/cart")({
@@ -15,7 +17,11 @@ export const Route = createFileRoute("/cart")({
 function CartPage() {
   const navigate = useNavigate();
   const { lines, shopId, subtotal, setQty, add, remove, itemCount } = useCart();
-  const shop = shopId ? getShop(shopId) : undefined;
+  const { data: shop } = useQuery({
+    queryKey: ["shop", shopId],
+    queryFn: () => getShop({ data: { shopId: shopId! } }),
+    enabled: Boolean(shopId),
+  });
 
   if (itemCount === 0 || !shop) {
     return (

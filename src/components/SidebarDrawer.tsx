@@ -351,13 +351,14 @@ function SidebarItem({
         {!collapsed && <span className="truncate">{item.label}</span>}
       </div>
 
-      {/* Pin action button on hover */}
+      {/* Pin action button — visible on hover, on keyboard focus (group-focus-within), and always once pinned */}
       {!collapsed && (
         <button
           onClick={onTogglePin}
+          aria-label={isPinned ? "Unfavorite" : "Favorite"}
           className={cn(
-            "opacity-0 group-hover:opacity-100 p-0.5 rounded-md hover:bg-muted-foreground/15 text-muted-foreground hover:text-foreground transition-all cursor-pointer",
-            isPinned && "opacity-100 text-amber-500 hover:text-amber-600"
+            "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 p-0.5 rounded-md hover:bg-muted-foreground/15 text-muted-foreground hover:text-foreground transition-all cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
+            isPinned && "opacity-100 text-amber-500 hover:text-amber-600",
           )}
           title={isPinned ? "Unfavorite" : "Favorite"}
         >

@@ -9,17 +9,28 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as WishlistRouteImport } from './routes/wishlist'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
+import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SellerRouteImport } from './routes/seller'
 import { Route as SellRouteImport } from './routes/sell'
 import { Route as SearchRouteImport } from './routes/search'
+import { Route as PaymentsRouteImport } from './routes/payments'
 import { Route as PartnerRouteImport } from './routes/partner'
 import { Route as OrdersRouteImport } from './routes/orders'
+import { Route as OffersRouteImport } from './routes/offers'
+import { Route as NotificationsRouteImport } from './routes/notifications'
+import { Route as HelpRouteImport } from './routes/help'
 import { Route as CheckoutRouteImport } from './routes/checkout'
 import { Route as CartRouteImport } from './routes/cart'
+import { Route as ApiDocsRouteImport } from './routes/api-docs'
+import { Route as AdminRouteImport } from './routes/admin'
+import { Route as AddressesRouteImport } from './routes/addresses'
+import { Route as AboutRouteImport } from './routes/about'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SellerIndexRouteImport } from './routes/seller.index'
 import { Route as PartnerIndexRouteImport } from './routes/partner.index'
+import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as ShopShopIdRouteImport } from './routes/shop.$shopId'
 import { Route as SellerVerificationRouteImport } from './routes/seller.verification'
 import { Route as SellerSettingsRouteImport } from './routes/seller.settings'
@@ -30,13 +41,29 @@ import { Route as PartnerProfileRouteImport } from './routes/partner.profile'
 import { Route as PartnerEarningsRouteImport } from './routes/partner.earnings'
 import { Route as PartnerDeliveriesRouteImport } from './routes/partner.deliveries'
 import { Route as OrderOrderIdRouteImport } from './routes/order.$orderId'
+import { Route as ApiDocsOpenapiDotjsonRouteImport } from './routes/api-docs.openapi[.]json'
 import { Route as AdminVerificationRouteImport } from './routes/admin.verification'
+import { Route as AdminShopsRouteImport } from './routes/admin.shops'
+import { Route as AdminPartnersRouteImport } from './routes/admin.partners'
+import { Route as AdminOrdersRouteImport } from './routes/admin.orders'
 import { Route as SellerTrackOrderIdRouteImport } from './routes/seller.track.$orderId'
 import { Route as PartnerTrackOrderIdRouteImport } from './routes/partner.track.$orderId'
+import { Route as ApiWebhooksRazorpayRouteImport } from './routes/api.webhooks.razorpay'
+import { Route as ApiLiveOrderOrderIdRouteImport } from './routes/api.live.order.$orderId'
 
+const WishlistRoute = WishlistRouteImport.update({
+  id: '/wishlist',
+  path: '/wishlist',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   id: '/sitemap.xml',
   path: '/sitemap.xml',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SellerRoute = SellerRouteImport.update({
@@ -54,6 +81,11 @@ const SearchRoute = SearchRouteImport.update({
   path: '/search',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PaymentsRoute = PaymentsRouteImport.update({
+  id: '/payments',
+  path: '/payments',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PartnerRoute = PartnerRouteImport.update({
   id: '/partner',
   path: '/partner',
@@ -64,6 +96,21 @@ const OrdersRoute = OrdersRouteImport.update({
   path: '/orders',
   getParentRoute: () => rootRouteImport,
 } as any)
+const OffersRoute = OffersRouteImport.update({
+  id: '/offers',
+  path: '/offers',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const NotificationsRoute = NotificationsRouteImport.update({
+  id: '/notifications',
+  path: '/notifications',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HelpRoute = HelpRouteImport.update({
+  id: '/help',
+  path: '/help',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CheckoutRoute = CheckoutRouteImport.update({
   id: '/checkout',
   path: '/checkout',
@@ -72,6 +119,26 @@ const CheckoutRoute = CheckoutRouteImport.update({
 const CartRoute = CartRouteImport.update({
   id: '/cart',
   path: '/cart',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiDocsRoute = ApiDocsRouteImport.update({
+  id: '/api-docs',
+  path: '/api-docs',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminRoute = AdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AddressesRoute = AddressesRouteImport.update({
+  id: '/addresses',
+  path: '/addresses',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AboutRoute = AboutRouteImport.update({
+  id: '/about',
+  path: '/about',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -88,6 +155,11 @@ const PartnerIndexRoute = PartnerIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => PartnerRoute,
+} as any)
+const AdminIndexRoute = AdminIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AdminRoute,
 } as any)
 const ShopShopIdRoute = ShopShopIdRouteImport.update({
   id: '/shop/$shopId',
@@ -139,10 +211,30 @@ const OrderOrderIdRoute = OrderOrderIdRouteImport.update({
   path: '/order/$orderId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiDocsOpenapiDotjsonRoute = ApiDocsOpenapiDotjsonRouteImport.update({
+  id: '/openapi.json',
+  path: '/openapi.json',
+  getParentRoute: () => ApiDocsRoute,
+} as any)
 const AdminVerificationRoute = AdminVerificationRouteImport.update({
-  id: '/admin/verification',
-  path: '/admin/verification',
-  getParentRoute: () => rootRouteImport,
+  id: '/verification',
+  path: '/verification',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminShopsRoute = AdminShopsRouteImport.update({
+  id: '/shops',
+  path: '/shops',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminPartnersRoute = AdminPartnersRouteImport.update({
+  id: '/partners',
+  path: '/partners',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminOrdersRoute = AdminOrdersRouteImport.update({
+  id: '/orders',
+  path: '/orders',
+  getParentRoute: () => AdminRoute,
 } as any)
 const SellerTrackOrderIdRoute = SellerTrackOrderIdRouteImport.update({
   id: '/track/$orderId',
@@ -154,18 +246,42 @@ const PartnerTrackOrderIdRoute = PartnerTrackOrderIdRouteImport.update({
   path: '/track/$orderId',
   getParentRoute: () => PartnerRoute,
 } as any)
+const ApiWebhooksRazorpayRoute = ApiWebhooksRazorpayRouteImport.update({
+  id: '/api/webhooks/razorpay',
+  path: '/api/webhooks/razorpay',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiLiveOrderOrderIdRoute = ApiLiveOrderOrderIdRouteImport.update({
+  id: '/api/live/order/$orderId',
+  path: '/api/live/order/$orderId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/about': typeof AboutRoute
+  '/addresses': typeof AddressesRoute
+  '/admin': typeof AdminRouteWithChildren
+  '/api-docs': typeof ApiDocsRouteWithChildren
   '/cart': typeof CartRoute
   '/checkout': typeof CheckoutRoute
+  '/help': typeof HelpRoute
+  '/notifications': typeof NotificationsRoute
+  '/offers': typeof OffersRoute
   '/orders': typeof OrdersRoute
   '/partner': typeof PartnerRouteWithChildren
+  '/payments': typeof PaymentsRoute
   '/search': typeof SearchRoute
   '/sell': typeof SellRoute
   '/seller': typeof SellerRouteWithChildren
+  '/settings': typeof SettingsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/wishlist': typeof WishlistRoute
+  '/admin/orders': typeof AdminOrdersRoute
+  '/admin/partners': typeof AdminPartnersRoute
+  '/admin/shops': typeof AdminShopsRoute
   '/admin/verification': typeof AdminVerificationRoute
+  '/api-docs/openapi.json': typeof ApiDocsOpenapiDotjsonRoute
   '/order/$orderId': typeof OrderOrderIdRoute
   '/partner/deliveries': typeof PartnerDeliveriesRoute
   '/partner/earnings': typeof PartnerEarningsRoute
@@ -176,20 +292,36 @@ export interface FileRoutesByFullPath {
   '/seller/settings': typeof SellerSettingsRoute
   '/seller/verification': typeof SellerVerificationRoute
   '/shop/$shopId': typeof ShopShopIdRoute
+  '/admin/': typeof AdminIndexRoute
   '/partner/': typeof PartnerIndexRoute
   '/seller/': typeof SellerIndexRoute
+  '/api/webhooks/razorpay': typeof ApiWebhooksRazorpayRoute
   '/partner/track/$orderId': typeof PartnerTrackOrderIdRoute
   '/seller/track/$orderId': typeof SellerTrackOrderIdRoute
+  '/api/live/order/$orderId': typeof ApiLiveOrderOrderIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/about': typeof AboutRoute
+  '/addresses': typeof AddressesRoute
+  '/api-docs': typeof ApiDocsRouteWithChildren
   '/cart': typeof CartRoute
   '/checkout': typeof CheckoutRoute
+  '/help': typeof HelpRoute
+  '/notifications': typeof NotificationsRoute
+  '/offers': typeof OffersRoute
   '/orders': typeof OrdersRoute
+  '/payments': typeof PaymentsRoute
   '/search': typeof SearchRoute
   '/sell': typeof SellRoute
+  '/settings': typeof SettingsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/wishlist': typeof WishlistRoute
+  '/admin/orders': typeof AdminOrdersRoute
+  '/admin/partners': typeof AdminPartnersRoute
+  '/admin/shops': typeof AdminShopsRoute
   '/admin/verification': typeof AdminVerificationRoute
+  '/api-docs/openapi.json': typeof ApiDocsOpenapiDotjsonRoute
   '/order/$orderId': typeof OrderOrderIdRoute
   '/partner/deliveries': typeof PartnerDeliveriesRoute
   '/partner/earnings': typeof PartnerEarningsRoute
@@ -200,23 +332,40 @@ export interface FileRoutesByTo {
   '/seller/settings': typeof SellerSettingsRoute
   '/seller/verification': typeof SellerVerificationRoute
   '/shop/$shopId': typeof ShopShopIdRoute
+  '/admin': typeof AdminIndexRoute
   '/partner': typeof PartnerIndexRoute
   '/seller': typeof SellerIndexRoute
+  '/api/webhooks/razorpay': typeof ApiWebhooksRazorpayRoute
   '/partner/track/$orderId': typeof PartnerTrackOrderIdRoute
   '/seller/track/$orderId': typeof SellerTrackOrderIdRoute
+  '/api/live/order/$orderId': typeof ApiLiveOrderOrderIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/about': typeof AboutRoute
+  '/addresses': typeof AddressesRoute
+  '/admin': typeof AdminRouteWithChildren
+  '/api-docs': typeof ApiDocsRouteWithChildren
   '/cart': typeof CartRoute
   '/checkout': typeof CheckoutRoute
+  '/help': typeof HelpRoute
+  '/notifications': typeof NotificationsRoute
+  '/offers': typeof OffersRoute
   '/orders': typeof OrdersRoute
   '/partner': typeof PartnerRouteWithChildren
+  '/payments': typeof PaymentsRoute
   '/search': typeof SearchRoute
   '/sell': typeof SellRoute
   '/seller': typeof SellerRouteWithChildren
+  '/settings': typeof SettingsRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/wishlist': typeof WishlistRoute
+  '/admin/orders': typeof AdminOrdersRoute
+  '/admin/partners': typeof AdminPartnersRoute
+  '/admin/shops': typeof AdminShopsRoute
   '/admin/verification': typeof AdminVerificationRoute
+  '/api-docs/openapi.json': typeof ApiDocsOpenapiDotjsonRoute
   '/order/$orderId': typeof OrderOrderIdRoute
   '/partner/deliveries': typeof PartnerDeliveriesRoute
   '/partner/earnings': typeof PartnerEarningsRoute
@@ -227,24 +376,41 @@ export interface FileRoutesById {
   '/seller/settings': typeof SellerSettingsRoute
   '/seller/verification': typeof SellerVerificationRoute
   '/shop/$shopId': typeof ShopShopIdRoute
+  '/admin/': typeof AdminIndexRoute
   '/partner/': typeof PartnerIndexRoute
   '/seller/': typeof SellerIndexRoute
+  '/api/webhooks/razorpay': typeof ApiWebhooksRazorpayRoute
   '/partner/track/$orderId': typeof PartnerTrackOrderIdRoute
   '/seller/track/$orderId': typeof SellerTrackOrderIdRoute
+  '/api/live/order/$orderId': typeof ApiLiveOrderOrderIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/about'
+    | '/addresses'
+    | '/admin'
+    | '/api-docs'
     | '/cart'
     | '/checkout'
+    | '/help'
+    | '/notifications'
+    | '/offers'
     | '/orders'
     | '/partner'
+    | '/payments'
     | '/search'
     | '/sell'
     | '/seller'
+    | '/settings'
     | '/sitemap.xml'
+    | '/wishlist'
+    | '/admin/orders'
+    | '/admin/partners'
+    | '/admin/shops'
     | '/admin/verification'
+    | '/api-docs/openapi.json'
     | '/order/$orderId'
     | '/partner/deliveries'
     | '/partner/earnings'
@@ -255,20 +421,36 @@ export interface FileRouteTypes {
     | '/seller/settings'
     | '/seller/verification'
     | '/shop/$shopId'
+    | '/admin/'
     | '/partner/'
     | '/seller/'
+    | '/api/webhooks/razorpay'
     | '/partner/track/$orderId'
     | '/seller/track/$orderId'
+    | '/api/live/order/$orderId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/about'
+    | '/addresses'
+    | '/api-docs'
     | '/cart'
     | '/checkout'
+    | '/help'
+    | '/notifications'
+    | '/offers'
     | '/orders'
+    | '/payments'
     | '/search'
     | '/sell'
+    | '/settings'
     | '/sitemap.xml'
+    | '/wishlist'
+    | '/admin/orders'
+    | '/admin/partners'
+    | '/admin/shops'
     | '/admin/verification'
+    | '/api-docs/openapi.json'
     | '/order/$orderId'
     | '/partner/deliveries'
     | '/partner/earnings'
@@ -279,22 +461,39 @@ export interface FileRouteTypes {
     | '/seller/settings'
     | '/seller/verification'
     | '/shop/$shopId'
+    | '/admin'
     | '/partner'
     | '/seller'
+    | '/api/webhooks/razorpay'
     | '/partner/track/$orderId'
     | '/seller/track/$orderId'
+    | '/api/live/order/$orderId'
   id:
     | '__root__'
     | '/'
+    | '/about'
+    | '/addresses'
+    | '/admin'
+    | '/api-docs'
     | '/cart'
     | '/checkout'
+    | '/help'
+    | '/notifications'
+    | '/offers'
     | '/orders'
     | '/partner'
+    | '/payments'
     | '/search'
     | '/sell'
     | '/seller'
+    | '/settings'
     | '/sitemap.xml'
+    | '/wishlist'
+    | '/admin/orders'
+    | '/admin/partners'
+    | '/admin/shops'
     | '/admin/verification'
+    | '/api-docs/openapi.json'
     | '/order/$orderId'
     | '/partner/deliveries'
     | '/partner/earnings'
@@ -305,34 +504,62 @@ export interface FileRouteTypes {
     | '/seller/settings'
     | '/seller/verification'
     | '/shop/$shopId'
+    | '/admin/'
     | '/partner/'
     | '/seller/'
+    | '/api/webhooks/razorpay'
     | '/partner/track/$orderId'
     | '/seller/track/$orderId'
+    | '/api/live/order/$orderId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AboutRoute: typeof AboutRoute
+  AddressesRoute: typeof AddressesRoute
+  AdminRoute: typeof AdminRouteWithChildren
+  ApiDocsRoute: typeof ApiDocsRouteWithChildren
   CartRoute: typeof CartRoute
   CheckoutRoute: typeof CheckoutRoute
+  HelpRoute: typeof HelpRoute
+  NotificationsRoute: typeof NotificationsRoute
+  OffersRoute: typeof OffersRoute
   OrdersRoute: typeof OrdersRoute
   PartnerRoute: typeof PartnerRouteWithChildren
+  PaymentsRoute: typeof PaymentsRoute
   SearchRoute: typeof SearchRoute
   SellRoute: typeof SellRoute
   SellerRoute: typeof SellerRouteWithChildren
+  SettingsRoute: typeof SettingsRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
-  AdminVerificationRoute: typeof AdminVerificationRoute
+  WishlistRoute: typeof WishlistRoute
   OrderOrderIdRoute: typeof OrderOrderIdRoute
   ShopShopIdRoute: typeof ShopShopIdRoute
+  ApiWebhooksRazorpayRoute: typeof ApiWebhooksRazorpayRoute
+  ApiLiveOrderOrderIdRoute: typeof ApiLiveOrderOrderIdRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/wishlist': {
+      id: '/wishlist'
+      path: '/wishlist'
+      fullPath: '/wishlist'
+      preLoaderRoute: typeof WishlistRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/sitemap.xml': {
       id: '/sitemap.xml'
       path: '/sitemap.xml'
       fullPath: '/sitemap.xml'
       preLoaderRoute: typeof SitemapDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/seller': {
@@ -356,6 +583,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SearchRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/payments': {
+      id: '/payments'
+      path: '/payments'
+      fullPath: '/payments'
+      preLoaderRoute: typeof PaymentsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/partner': {
       id: '/partner'
       path: '/partner'
@@ -370,6 +604,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OrdersRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/offers': {
+      id: '/offers'
+      path: '/offers'
+      fullPath: '/offers'
+      preLoaderRoute: typeof OffersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/notifications': {
+      id: '/notifications'
+      path: '/notifications'
+      fullPath: '/notifications'
+      preLoaderRoute: typeof NotificationsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/help': {
+      id: '/help'
+      path: '/help'
+      fullPath: '/help'
+      preLoaderRoute: typeof HelpRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/checkout': {
       id: '/checkout'
       path: '/checkout'
@@ -382,6 +637,34 @@ declare module '@tanstack/react-router' {
       path: '/cart'
       fullPath: '/cart'
       preLoaderRoute: typeof CartRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api-docs': {
+      id: '/api-docs'
+      path: '/api-docs'
+      fullPath: '/api-docs'
+      preLoaderRoute: typeof ApiDocsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin': {
+      id: '/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/addresses': {
+      id: '/addresses'
+      path: '/addresses'
+      fullPath: '/addresses'
+      preLoaderRoute: typeof AddressesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/about': {
+      id: '/about'
+      path: '/about'
+      fullPath: '/about'
+      preLoaderRoute: typeof AboutRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -404,6 +687,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/partner/'
       preLoaderRoute: typeof PartnerIndexRouteImport
       parentRoute: typeof PartnerRoute
+    }
+    '/admin/': {
+      id: '/admin/'
+      path: '/'
+      fullPath: '/admin/'
+      preLoaderRoute: typeof AdminIndexRouteImport
+      parentRoute: typeof AdminRoute
     }
     '/shop/$shopId': {
       id: '/shop/$shopId'
@@ -475,12 +765,40 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OrderOrderIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api-docs/openapi.json': {
+      id: '/api-docs/openapi.json'
+      path: '/openapi.json'
+      fullPath: '/api-docs/openapi.json'
+      preLoaderRoute: typeof ApiDocsOpenapiDotjsonRouteImport
+      parentRoute: typeof ApiDocsRoute
+    }
     '/admin/verification': {
       id: '/admin/verification'
-      path: '/admin/verification'
+      path: '/verification'
       fullPath: '/admin/verification'
       preLoaderRoute: typeof AdminVerificationRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/shops': {
+      id: '/admin/shops'
+      path: '/shops'
+      fullPath: '/admin/shops'
+      preLoaderRoute: typeof AdminShopsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/partners': {
+      id: '/admin/partners'
+      path: '/partners'
+      fullPath: '/admin/partners'
+      preLoaderRoute: typeof AdminPartnersRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/orders': {
+      id: '/admin/orders'
+      path: '/orders'
+      fullPath: '/admin/orders'
+      preLoaderRoute: typeof AdminOrdersRouteImport
+      parentRoute: typeof AdminRoute
     }
     '/seller/track/$orderId': {
       id: '/seller/track/$orderId'
@@ -496,8 +814,51 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PartnerTrackOrderIdRouteImport
       parentRoute: typeof PartnerRoute
     }
+    '/api/webhooks/razorpay': {
+      id: '/api/webhooks/razorpay'
+      path: '/api/webhooks/razorpay'
+      fullPath: '/api/webhooks/razorpay'
+      preLoaderRoute: typeof ApiWebhooksRazorpayRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/live/order/$orderId': {
+      id: '/api/live/order/$orderId'
+      path: '/api/live/order/$orderId'
+      fullPath: '/api/live/order/$orderId'
+      preLoaderRoute: typeof ApiLiveOrderOrderIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
+
+interface AdminRouteChildren {
+  AdminOrdersRoute: typeof AdminOrdersRoute
+  AdminPartnersRoute: typeof AdminPartnersRoute
+  AdminShopsRoute: typeof AdminShopsRoute
+  AdminVerificationRoute: typeof AdminVerificationRoute
+  AdminIndexRoute: typeof AdminIndexRoute
+}
+
+const AdminRouteChildren: AdminRouteChildren = {
+  AdminOrdersRoute: AdminOrdersRoute,
+  AdminPartnersRoute: AdminPartnersRoute,
+  AdminShopsRoute: AdminShopsRoute,
+  AdminVerificationRoute: AdminVerificationRoute,
+  AdminIndexRoute: AdminIndexRoute,
+}
+
+const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
+
+interface ApiDocsRouteChildren {
+  ApiDocsOpenapiDotjsonRoute: typeof ApiDocsOpenapiDotjsonRoute
+}
+
+const ApiDocsRouteChildren: ApiDocsRouteChildren = {
+  ApiDocsOpenapiDotjsonRoute: ApiDocsOpenapiDotjsonRoute,
+}
+
+const ApiDocsRouteWithChildren =
+  ApiDocsRoute._addFileChildren(ApiDocsRouteChildren)
 
 interface PartnerRouteChildren {
   PartnerDeliveriesRoute: typeof PartnerDeliveriesRoute
@@ -543,18 +904,39 @@ const SellerRouteWithChildren =
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AboutRoute: AboutRoute,
+  AddressesRoute: AddressesRoute,
+  AdminRoute: AdminRouteWithChildren,
+  ApiDocsRoute: ApiDocsRouteWithChildren,
   CartRoute: CartRoute,
   CheckoutRoute: CheckoutRoute,
+  HelpRoute: HelpRoute,
+  NotificationsRoute: NotificationsRoute,
+  OffersRoute: OffersRoute,
   OrdersRoute: OrdersRoute,
   PartnerRoute: PartnerRouteWithChildren,
+  PaymentsRoute: PaymentsRoute,
   SearchRoute: SearchRoute,
   SellRoute: SellRoute,
   SellerRoute: SellerRouteWithChildren,
+  SettingsRoute: SettingsRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
-  AdminVerificationRoute: AdminVerificationRoute,
+  WishlistRoute: WishlistRoute,
   OrderOrderIdRoute: OrderOrderIdRoute,
   ShopShopIdRoute: ShopShopIdRoute,
+  ApiWebhooksRazorpayRoute: ApiWebhooksRazorpayRoute,
+  ApiLiveOrderOrderIdRoute: ApiLiveOrderOrderIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

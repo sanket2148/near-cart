@@ -16,12 +16,7 @@ export type BusinessType =
 
 export type BadgeTier = "none" | "basic" | "verified" | "premium" | "trusted";
 
-export type LevelStatus =
-  | "not_started"
-  | "in_progress"
-  | "submitted"
-  | "verified"
-  | "rejected";
+export type LevelStatus = "not_started" | "in_progress" | "submitted" | "verified" | "rejected";
 
 export type RiskTier = "low" | "medium" | "high";
 
@@ -85,6 +80,21 @@ export type FileAnalysis = {
   matchDetails: Record<string, number>;
   issues: string[];
   createdAt: number;
+  /**
+   * Real government-registry cross-check (GSTN/FoSCoS via Deepvue) for
+   * gst/fssai/pan documents — a materially stronger signal than the OCR
+   * quality/authenticity scores above, since it confirms the number ON the
+   * document actually exists and is active, not just that the image looks
+   * plausible. Absent when doc-verify isn't configured (true today) or the
+   * doc type isn't one of the three currently supported — see
+   * src/lib/doc-verify/backend.server.ts.
+   */
+  registryCheck?: {
+    verified: boolean;
+    status: string | null;
+    registryName: string | null;
+    nameMatchScore: number | null;
+  };
 };
 
 export type DocumentUpload = {
@@ -343,6 +353,20 @@ export const VERIFICATION_STEPS: {
 // ─── Functions ───────────────────────────────────────────────────────────────
 
 /** Create a blank verification state for a new shop. */
+/** Read a File as base64 (without the `data:...;base64,` prefix) for upload to the server. */
+export function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      const comma = result.indexOf(",");
+      resolve(comma >= 0 ? result.slice(comma + 1) : result);
+    };
+    reader.onerror = () => reject(reader.error ?? new Error("Failed to read file"));
+    reader.readAsDataURL(file);
+  });
+}
+
 /** Generate a stable merchant reference id (used to key backend records). */
 export function genMerchantRef(): string {
   try {
@@ -420,8 +444,7 @@ export function computeBadgeTier(v: ShopVerification): BadgeTier {
 
   // L1: both phone and email must be verified
   const l1Done =
-    levels.l1_contact.phoneStatus === "verified" &&
-    levels.l1_contact.emailStatus === "verified";
+    levels.l1_contact.phoneStatus === "verified" && levels.l1_contact.emailStatus === "verified";
   if (!l1Done) return "none";
 
   // L2 + L4: documents and bank verified
@@ -504,8 +527,7 @@ export function isStepComplete(v: ShopVerification, step: number): boolean {
     case 1:
       // L1: both phone and email must be verified
       return (
-        levels.l1_contact.phoneStatus === "verified" &&
-        levels.l1_contact.emailStatus === "verified"
+        levels.l1_contact.phoneStatus === "verified" && levels.l1_contact.emailStatus === "verified"
       );
     case 2:
       return levels.l2_documents.status === "verified";
@@ -525,8 +547,14 @@ export function isStepComplete(v: ShopVerification, step: number): boolean {
 }
 
 // ─── localStorage Persistence ────────────────────────────────────────────────
+// Keyed per-shop so multiple real shops (different logged-in sellers) can
+// each keep their own verification progress instead of sharing one record.
 
-export const VERIFICATION_STORAGE_KEY = "nearcart-verification";
+const VERIFICATION_KEY_PREFIX = "nearcart-verification-";
+
+export function verificationStorageKey(shopId: string): string {
+  return `${VERIFICATION_KEY_PREFIX}${shopId}`;
+}
 
 /**
  * Load verification state for a shop from localStorage.
@@ -535,14 +563,57 @@ export const VERIFICATION_STORAGE_KEY = "nearcart-verification";
 export function loadVerification(shopId: string): ShopVerification {
   try {
     if (typeof window === "undefined") return createEmptyVerification(shopId);
-    const raw = localStorage.getItem(VERIFICATION_STORAGE_KEY);
+    const raw = localStorage.getItem(verificationStorageKey(shopId));
     if (!raw) return createEmptyVerification(shopId);
     const parsed = JSON.parse(raw) as ShopVerification;
     // Make sure the stored data is for this shop
     if (parsed.shopId !== shopId) return createEmptyVerification(shopId);
     // Backfill merchantRef for states saved before backend integration.
     if (!parsed.merchantRef) parsed.merchantRef = genMerchantRef();
-    return parsed;
+    
+    // Deep merge / backfill with createEmptyVerification to prevent rendering crashes due to old schema
+    const empty = createEmptyVerification(shopId);
+    const merged: ShopVerification = {
+      ...empty,
+      ...parsed,
+      levels: {
+        ...empty.levels,
+        ...(parsed.levels || {}),
+        l1_contact: {
+          ...empty.levels.l1_contact,
+          ...((parsed.levels?.l1_contact) || {}),
+        },
+        l2_documents: {
+          ...empty.levels.l2_documents,
+          ...((parsed.levels?.l2_documents) || {}),
+        },
+        l3_kyc: {
+          ...empty.levels.l3_kyc,
+          ...((parsed.levels?.l3_kyc) || {}),
+        },
+        l4_bank: {
+          ...empty.levels.l4_bank,
+          ...((parsed.levels?.l4_bank) || {}),
+        },
+        l5_gps: {
+          ...empty.levels.l5_gps,
+          ...((parsed.levels?.l5_gps) || {}),
+        },
+        l6_ai: {
+          ...empty.levels.l6_ai,
+          ...((parsed.levels?.l6_ai) || {}),
+        },
+        l7_review: {
+          ...empty.levels.l7_review,
+          ...((parsed.levels?.l7_review) || {}),
+        },
+        l8_customer: {
+          ...empty.levels.l8_customer,
+          ...((parsed.levels?.l8_customer) || {}),
+        },
+      },
+    };
+    return merged;
   } catch {
     return createEmptyVerification(shopId);
   }
@@ -552,8 +623,31 @@ export function loadVerification(shopId: string): ShopVerification {
 export function saveVerification(v: ShopVerification): void {
   try {
     if (typeof window === "undefined") return;
-    localStorage.setItem(VERIFICATION_STORAGE_KEY, JSON.stringify(v));
+    localStorage.setItem(verificationStorageKey(v.shopId), JSON.stringify(v));
   } catch {
     /* ignore — quota exceeded or private browsing */
+  }
+}
+
+/** All real shops' verification records currently in localStorage (for the admin queue). */
+export function listAllVerifications(): ShopVerification[] {
+  try {
+    if (typeof window === "undefined") return [];
+    const results: ShopVerification[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key || !key.startsWith(VERIFICATION_KEY_PREFIX)) continue;
+      try {
+        const raw = localStorage.getItem(key);
+        if (!raw) continue;
+        const parsed = JSON.parse(raw) as ShopVerification;
+        if (parsed?.shopId) results.push(parsed);
+      } catch {
+        /* skip corrupt entry */
+      }
+    }
+    return results;
+  } catch {
+    return [];
   }
 }

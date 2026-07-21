@@ -12,6 +12,7 @@ import {
 import { usePartner, JOB_STATUS_LABEL, jobEarning, timeAgo } from "@/lib/partner";
 import { formatINR } from "@/lib/data";
 import { Button } from "@/components/ui/button";
+import { StatCard } from "@/components/dashboard/StatCard";
 
 export const Route = createFileRoute("/partner/")({
   component: PartnerDashboard,
@@ -68,13 +69,7 @@ function PartnerDashboard() {
       {/* Stat tiles */}
       <div className="grid grid-cols-2 gap-3">
         {tiles.map((t) => (
-          <div key={t.label} className="rounded-2xl border border-border bg-card p-4 shadow-card">
-            <span className={`flex h-9 w-9 items-center justify-center rounded-xl ${t.bg} ${t.tone}`}>
-              <t.icon className="h-5 w-5" />
-            </span>
-            <p className="mt-3 text-2xl font-extrabold leading-none">{t.value}</p>
-            <p className="mt-1 text-xs font-medium text-muted-foreground">{t.label}</p>
-          </div>
+          <StatCard key={t.label} icon={t.icon} label={t.label} value={t.value} tone={t.tone} bg={t.bg} />
         ))}
       </div>
 

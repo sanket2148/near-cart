@@ -1,9 +1,11 @@
-import { StyleSheet, Text, View, FlatList, Pressable, SafeAreaView } from 'react-native';
-import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
+import { useState, useCallback } from 'react';
+import { StyleSheet, Text, View, FlatList, Pressable, ActivityIndicator } from 'react-native';
+import { useRoute, useNavigation, useFocusEffect, RouteProp } from '@react-navigation/native';
 import { ArrowLeft, ShoppingBag } from 'lucide-react-native';
 import { RootStackParamList, RootStackNavigationProp } from '../navigation/types';
 import { useCart } from '@/lib/cart';
-import { shops, products } from '@/lib/data';
+import type { Shop, Product } from '@/lib/data';
+import { getShop, getShopProducts } from '../lib/catalog';
 
 type ShopDetailsRouteProp = RouteProp<RootStackParamList, 'ShopDetails'>;
 
@@ -13,10 +15,35 @@ export default function ShopDetailsScreen() {
   const { shopId } = route.params;
 
   const { add, qtyOf, setQty, itemCount, subtotal } = useCart();
+  const [shop, setShop] = useState<Shop | null | undefined>(undefined);
+  const [shopProducts, setShopProducts] = useState<Product[]>([]);
 
-  // Find shop and products
-  const shop = shops.find((s) => s.id === shopId);
-  const shopProducts = products.filter((p) => p.shopId === shopId);
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      Promise.all([getShop(shopId), getShopProducts(shopId)])
+        .then(([shopRow, productRows]) => {
+          if (cancelled) return;
+          setShop(shopRow);
+          setShopProducts(productRows);
+        })
+        .catch((err) => {
+          console.warn('Failed to load shop:', err);
+          if (!cancelled) setShop(null);
+        });
+      return () => {
+        cancelled = true;
+      };
+    }, [shopId]),
+  );
+
+  if (shop === undefined) {
+    return (
+      <View style={[styles.errorContainer]}>
+        <ActivityIndicator color="#259F56" />
+      </View>
+    );
+  }
 
   if (!shop) {
     return (

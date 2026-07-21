@@ -1,29 +1,52 @@
 import { useState, useCallback } from 'react';
-import { StyleSheet, Text, View, FlatList, Pressable } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import { StyleSheet, Text, View, FlatList, Pressable, ActivityIndicator } from 'react-native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { ClipboardList } from 'lucide-react-native';
-import { getOrders, type Order } from '@/lib/orders';
+import { getMyOrders, type MobileOrder } from '../lib/orders';
+import { useAuth } from '../lib/auth';
+import { RootStackNavigationProp } from '../navigation/types';
 
 export default function OrdersScreen() {
-  const [orders, setOrders] = useState<Order[]>([]);
+  const navigation = useNavigation<RootStackNavigationProp<'HomeTabs'>>();
+  const { user } = useAuth();
+  const [orders, setOrders] = useState<MobileOrder[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useFocusEffect(
     useCallback(() => {
-      setOrders(getOrders());
-    }, [])
+      if (!user) {
+        setOrders([]);
+        setLoading(false);
+        return;
+      }
+      let cancelled = false;
+      setLoading(true);
+      getMyOrders()
+        .then((rows) => {
+          if (!cancelled) setOrders(rows);
+        })
+        .catch((err) => console.warn('Failed to load orders:', err))
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
+      return () => {
+        cancelled = true;
+      };
+    }, [user]),
   );
-  const getStatusLabel = (status: Order['status']) => {
+  const getStatusLabel = (status: MobileOrder['status']) => {
     switch (status) {
       case 'placed': return 'Order Placed';
       case 'accepted': return 'Accepted';
       case 'preparing': return 'Preparing';
       case 'out_for_delivery': return 'Out for Delivery';
       case 'delivered': return 'Delivered';
+      case 'cancelled': return 'Cancelled';
       default: return 'Pending';
     }
   };
 
-  const getStatusColorStyles = (status: Order['status']) => {
+  const getStatusColorStyles = (status: MobileOrder['status']) => {
     if (status === 'delivered') {
       return {
         badge: styles.badgeSuccess,
@@ -36,11 +59,30 @@ export default function OrdersScreen() {
     };
   };
 
+  if (!user) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.title}>My Orders</Text>
+        <View style={styles.emptyContainer}>
+          <ClipboardList size={48} color="#94A3B8" />
+          <Text style={styles.emptyText}>Log in to see your orders.</Text>
+          <Pressable onPress={() => navigation.navigate('Login')} style={styles.loginButton}>
+            <Text style={styles.loginButtonText}>Log In</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <Text style={styles.title}>My Orders</Text>
 
-      {orders.length === 0 ? (
+      {loading ? (
+        <View style={styles.emptyContainer}>
+          <ActivityIndicator color="#259F56" />
+        </View>
+      ) : orders.length === 0 ? (
         <View style={styles.emptyContainer}>
           <ClipboardList size={48} color="#94A3B8" />
           <Text style={styles.emptyText}>You haven't placed any orders yet.</Text>
@@ -113,6 +155,18 @@ const styles = StyleSheet.create({
     color: '#64748B',
     textAlign: 'center',
     marginTop: 10,
+  },
+  loginButton: {
+    marginTop: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: '#259F56',
+  },
+  loginButtonText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 13,
   },
   listContainer: {
     paddingHorizontal: 16,

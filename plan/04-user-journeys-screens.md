@@ -17,17 +17,35 @@
 
 ---
 
+## 1a. Account creation model — one per user type, not one-size-fits-all
+
+There are three distinct actors and each earns an account differently. This mirrors how Zomato/Blinkit/Swiggy actually split it (see `plan/tasks/decisions.md` for sourcing): the **consumer-facing** surface avoids friction, the **workforce-facing** surfaces (shop owner, delivery partner) gate immediately because there's no browsing value without an account.
+
+| User type | When they're asked to log in | Why | First screen after OTP |
+|---|---|---|---|
+| **Customer** (Priya) | Deferred — only at checkout (C8/C9). Full guest browse + cart before that. | Removes signup friction from the moment with the least trust (first open); by checkout they've already found what they want. | Straight into Checkout (C10) with cart + address carried over. |
+| **Shop owner** (Ramesh) | Immediate — first thing on `/sell` → "Get started" (S1). | No such thing as a "guest shop dashboard" — every screen past login is their own business data. | Shop registration (S2) → the verification wizard you already built (Phases 1–8). |
+| **Delivery partner** (Ajay) | Immediate — first thing on `/partner` (P1). | Same reasoning as shop owner: partner app is 100% account-scoped (assignments, earnings, KYC). | Partner registration (P2) → KYC upload (P3). |
+
+**Current implementation gap (as of 2026-07-10):** none of the three actually have this today. `/seller`, `/sell`, `/partner`, and `/admin/verification` have zero route guards — no `beforeLoad` check, no redirect, nothing (confirmed by reading `seller.tsx`, `partner.tsx`, `sell.tsx`, `admin.verification.tsx`). Anyone can open `/seller/onboarding` directly with no account at all. The seller-verification wizard (Phases 1–8, already built) currently assumes a shop already exists in `SellerContext` — it has no "create shop" step in front of it. Closing this gap requires the `/auth/otp/*` backend from `backlog.md` → **Auth System**, which is entirely unbuilt. That's the real prerequisite before any of the three flows below can be more than a UI mockup.
+
+---
+
 ## 2. Customer journey map
 
 ```text
-DISCOVER → BROWSE → CART → CHECKOUT → PAY → TRACK → RECEIVE → RATE → REORDER
+LOCATE → DISCOVER → BROWSE → CART → AUTH (at checkout) → CHECKOUT → PAY → TRACK → RECEIVE → RATE → REORDER
 ```
+
+> **Decision (2026-07-10):** Login is deferred to checkout, not required to browse. See `plan/tasks/decisions.md` for the competitor research (Zomato/Blinkit/Zepto all let you browse and build a cart as a guest; phone+OTP is asked for only when you're about to pay, and OTP verify doubles as silent signup on first use). The cart is built client-side (already how `src/lib/cart.tsx` works) and merged into the account the moment OTP verification succeeds.
 
 | Stage | What Priya does | Feeling | Key screens |
 |---|---|---|---|
-| Discover | Opens app, sees nearby open shops | "What's close & open?" | Home/Discovery |
+| Locate | Grants location or types an area/pincode | "Do they even deliver here?" | Location gate |
+| Discover | Sees nearby open shops — no login needed | "What's close & open?" | Home/Discovery |
 | Browse | Picks shop, searches products | "Do they have what I need?" | Shop detail, Product list, Search |
-| Cart | Adds items, reviews | "Is the total fair?" | Cart |
+| Cart | Adds items, reviews — still no login | "Is the total fair?" | Cart |
+| Auth | Enters phone + OTP only when checking out | "Fine, one code and I'm in." | Phone/OTP (inline at checkout) |
 | Checkout | Address, schedule, promo | "How fast & how much?" | Checkout |
 | Pay | UPI / card / COD | "Did it go through?" | Payment |
 | Track | Watches partner on map | "Where's my order?" | Order tracking |
@@ -37,30 +55,33 @@ DISCOVER → BROWSE → CART → CHECKOUT → PAY → TRACK → RECEIVE → RATE
 
 ### Customer screen list
 
-| # | Screen | Purpose | Primary API |
-|---|---|---|---|
-| C1 | Splash / location permission | Get location for discovery | — |
-| C2 | Phone login (OTP request) | Enter phone | `POST /auth/otp/request` |
-| C3 | OTP verify | Enter code | `POST /auth/otp/verify` |
-| C4 | Profile setup | Name + first address | `PATCH /auth/me`, `POST /addresses` |
-| C5 | **Home / Discovery** | Nearby shops, category filter, search bar | `GET /shops/nearby` |
-| C6 | Global product search | Cross-shop search within radius | `GET /search/products` |
-| C7 | Shop detail | Hours, rating, categories, open status | `GET /shops/{id}` |
-| C8 | Product list / browse | Items in shop, add to cart | `GET /shops/{id}/products` |
-| C9 | Product detail | Image, price, unit, qty selector | `GET /shops/{id}/products` |
-| C10 | **Cart** | Line items, qty edit, subtotal | client + `POST /orders/quote` |
-| C11 | **Checkout** | Address pick, schedule now/later, promo | `POST /orders/quote` |
-| C12 | Payment | Method select, gateway flow, COD | `POST /orders`, `POST /payments/{id}/verify` |
-| C13 | Order placed / confirmation | Success + summary | `GET /orders/{id}` |
-| C14 | **Order tracking** | Live map, partner, ETA, status timeline | `GET /orders/{id}/track` + channel |
-| C15 | Delivery OTP / confirm | Show delivery OTP to partner | `GET /orders/{id}` |
-| C16 | Rate order | Shop + partner stars, comment | `POST /orders/{id}/review` |
-| C17 | Order history | Past orders, invoice download | `GET /orders?status=past` |
-| C18 | Reorder | One-tap repeat past order | `POST /orders` |
-| C19 | Addresses | Manage saved addresses | `/addresses` CRUD |
-| C20 | Profile / settings | Name, language, payment methods | `/auth/me` |
-| C21 | Coupons / referrals (P1) | Enter/share codes | promo endpoints |
-| C22 | Support chat (P2) | Order-specific help | chat |
+| # | Screen | Purpose | Primary API | Auth required? |
+|---|---|---|---|---|
+| C1 | Splash / location permission | Soft-ask copy, then native GPS prompt | — | No |
+| C1b | Manual address / pincode search | Fallback if GPS denied; also lets users change area later | `GET /serviceability?pincode=` | No |
+| C1c | Not serviceable / waitlist | Shown when no shop's delivery radius covers the location | `POST /waitlist` | No |
+| C2 | **Home / Discovery** | Nearby shops, category filter, search bar | `GET /shops/nearby` | No |
+| C3 | Global product search | Cross-shop search within radius | `GET /search/products` | No |
+| C4 | Shop detail | Hours, rating, categories, open status | `GET /shops/{id}` | No |
+| C5 | Product list / browse | Items in shop, add to cart | `GET /shops/{id}/products` | No |
+| C6 | Product detail | Image, price, unit, qty selector | `GET /shops/{id}/products` | No |
+| C7 | **Cart** | Line items, qty edit, subtotal (client-side until login) | client + `POST /orders/quote` | No |
+| C8 | Phone login (OTP request) | Triggered by tapping "Checkout"; inline/modal, not a full-page redirect | `POST /auth/otp/request` | — |
+| C9 | OTP verify | Enter code. First-ever success = silent signup; existing phone = login. Then merges guest cart into the account. | `POST /auth/otp/verify`, `POST /cart/merge` | — |
+| C10 | **Checkout** | Address pick (prefilled from C1/C1b), schedule now/later, promo | `POST /orders/quote` | Yes |
+| C11 | Payment | Method select, gateway flow, COD | `POST /orders`, `POST /payments/{id}/verify` | Yes |
+| C12 | Order placed / confirmation | Success + summary | `GET /orders/{id}` | Yes |
+| C13 | **Order tracking** | Live map, partner, ETA, status timeline | `GET /orders/{id}/track` + channel | Yes |
+| C14 | Delivery OTP / confirm | Show delivery OTP to partner | `GET /orders/{id}` | Yes |
+| C15 | Rate order | Shop + partner stars, comment | `POST /orders/{id}/review` | Yes |
+| C16 | Order history | Past orders, invoice download | `GET /orders?status=past` | Yes |
+| C17 | Reorder | One-tap repeat past order | `POST /orders` | Yes |
+| C18 | Addresses | Manage saved addresses | `/addresses` CRUD | Yes |
+| C19 | Profile / settings | Name (optional, asked once post-order), language, payment methods | `/auth/me` | Yes |
+| C20 | Coupons / referrals (P1) | Enter/share codes | promo endpoints | Yes |
+| C21 | Support chat (P2) | Order-specific help | chat | Yes |
+
+Shop owner (S-) and delivery partner (P-) flows are **not** guest-first — both require immediate phone+OTP login before anything else (S1/P1 unchanged below). There's no "browsing value" for a workforce app: you can't manage a shop or accept deliveries without an account, so gating upfront doesn't cost conversion the way it does for a shopper.
 
 ---
 

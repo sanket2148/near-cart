@@ -13,7 +13,7 @@ const items = [
 export function BottomNav() {
   const { itemCount } = useCart();
   return (
-    <nav className="sticky bottom-0 z-40 border-t border-border bg-background/90 backdrop-blur-md">
+    <nav className="sticky bottom-0 z-40 border-t border-border bg-background/90 backdrop-blur-md md:hidden">
       <div className="mx-auto flex max-w-2xl items-stretch justify-around">
         {items.map(({ to, label, icon: Icon }) => (
           <Link

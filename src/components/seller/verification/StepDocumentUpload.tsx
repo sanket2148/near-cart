@@ -1,15 +1,20 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { toast } from "sonner";
 import { Upload, FileText, CheckCircle2, XCircle, ArrowRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
   BUSINESS_TYPE_CONFIG,
   DOC_TYPE_LABELS,
-  type BusinessType,
+  fileToBase64,
   type DocumentType,
   type DocumentUpload,
   type ShopVerification,
 } from "@/lib/verification";
+import { submitVerificationFile } from "@/lib/verification/api.functions";
+
+const MAX_FILE_BYTES = 10 * 1024 * 1024;
+const ACCEPTED_TYPES = "image/jpeg,image/png,image/webp,application/pdf";
 
 type Props = {
   verification: ShopVerification;
@@ -28,6 +33,11 @@ export function StepDocumentUpload({ verification, onUpload, onComplete }: Props
   const allRequiredUploaded = config.requiredDocs.every((d) =>
     uploaded.some((u) => u.docType === d && u.status !== "rejected"),
   );
+
+  const form = {
+    ownerName: verification.levels.l3_kyc.panName || undefined,
+    businessType: bType,
+  };
 
   return (
     <div className="space-y-5">
@@ -48,6 +58,9 @@ export function StepDocumentUpload({ verification, onUpload, onComplete }: Props
               docType={docType}
               isRequired={isRequired}
               existing={existing}
+              merchantRef={verification.merchantRef}
+              shopId={verification.shopId}
+              form={form}
               onUpload={onUpload}
             />
           );
@@ -81,31 +94,78 @@ function DocUploadCard({
   docType,
   isRequired,
   existing,
+  merchantRef,
+  shopId,
+  form,
   onUpload,
 }: {
   docType: DocumentType;
   isRequired: boolean;
   existing?: DocumentUpload;
+  merchantRef: string;
+  shopId: string;
+  form: { businessName?: string; ownerName?: string; address?: string; businessType?: string };
   onUpload: (doc: DocumentUpload) => void;
 }) {
   const [uploading, setUploading] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
   const label = DOC_TYPE_LABELS[docType] ?? docType;
 
-  const isDone = existing && existing.status === "submitted";
+  const isDone = existing && (existing.status === "submitted" || existing.status === "verified");
   const isRejected = existing && existing.status === "rejected";
 
-  async function handleUpload() {
+  async function handleFileSelected(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+
+    if (file.size > MAX_FILE_BYTES) {
+      toast.error("File exceeds the 10 MB limit");
+      return;
+    }
+
     setUploading(true);
-    // Simulate file upload delay
-    await new Promise((r) => setTimeout(r, 1000 + Math.random() * 500));
-    setUploading(false);
-    onUpload({
-      id: `doc-${docType}-${Date.now()}`,
-      docType,
-      fileName: `${label.toLowerCase().replace(/\s/g, "_")}.pdf`,
-      status: "submitted",
-      uploadedAt: Date.now(),
-    });
+    try {
+      const dataBase64 = await fileToBase64(file);
+      const analysis = await submitVerificationFile({
+        data: {
+          merchantRef,
+          shopId,
+          category: "document",
+          docType,
+          fileName: file.name,
+          mimeType: file.type,
+          dataBase64,
+          form,
+        },
+      });
+
+      const status: DocumentUpload["status"] =
+        analysis.decision === "VERIFIED"
+          ? "verified"
+          : analysis.decision === "REJECTED"
+            ? "rejected"
+            : "submitted";
+
+      onUpload({
+        id: analysis.docId,
+        docType,
+        fileName: analysis.fileName,
+        status,
+        uploadedAt: analysis.createdAt,
+        rejectionReason: status === "rejected" ? analysis.issues[0] : undefined,
+        filePath: analysis.filePath,
+        analysis,
+      });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Upload failed. Please try again.");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  function handleUpload() {
+    inputRef.current?.click();
   }
 
   return (
@@ -119,6 +179,13 @@ function DocUploadCard({
             : "border-border bg-card shadow-card",
       )}
     >
+      <input
+        ref={inputRef}
+        type="file"
+        accept={ACCEPTED_TYPES}
+        className="hidden"
+        onChange={handleFileSelected}
+      />
       <div className="flex items-center gap-3">
         <span
           className={cn(
@@ -152,7 +219,9 @@ function DocUploadCard({
             )}
           </h4>
           {isDone && existing && (
-            <p className="text-xs text-muted-foreground">{existing.fileName} · Uploaded</p>
+            <p className="text-xs text-muted-foreground">
+              {existing.fileName} · {existing.status === "verified" ? "Verified" : "Under review"}
+            </p>
           )}
           {isRejected && existing?.rejectionReason && (
             <p className="text-xs text-destructive">{existing.rejectionReason}</p>

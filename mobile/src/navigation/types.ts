@@ -12,6 +12,7 @@ export type RootStackParamList = {
   HomeTabs: NavigatorScreenParams<HomeTabParamList>;
   ShopDetails: { shopId: string };
   Cart: undefined;
+  Login: undefined;
 };
 
 export type RootStackNavigationProp<RouteName extends keyof RootStackParamList> = NativeStackNavigationProp<
