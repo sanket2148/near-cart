@@ -40,7 +40,7 @@ export const Route = createFileRoute("/shop/$shopId")({
 });
 
 function ShopPage() {
-  const { shop, products } = Route.useLoaderData();
+  const { shop, products } = Route.useLoaderData() as { shop: any; products: Product[] };
   const [query, setQuery] = useState("");
   const { user } = useAuth();
   const queryClient = useQueryClient();
