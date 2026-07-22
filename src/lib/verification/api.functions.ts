@@ -38,7 +38,7 @@ const SubmitFileSchema = z.object({
 
 export const submitVerificationFile = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator(SubmitFileSchema)
+  .inputValidator(SubmitFileSchema)
   .handler(async ({ context, data }): Promise<FileAnalysis> => {
     const be = await import("./backend.server");
     return be.analyzeFile({ ...data, callerId: context.uid });
@@ -46,7 +46,7 @@ export const submitVerificationFile = createServerFn({ method: "POST" })
 
 export const getVerificationSubmission = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
-  .validator(z.object({ merchantRef: z.string().min(3).max(80), shopId: z.string().min(1) }))
+  .inputValidator(z.object({ merchantRef: z.string().min(3).max(80), shopId: z.string().min(1) }))
   .handler(async ({ context, data }) => {
     const be = await import("./backend.server");
     return be.getSubmission(data.merchantRef, data.shopId, context.uid);
@@ -54,7 +54,7 @@ export const getVerificationSubmission = createServerFn({ method: "GET" })
 
 export const finalizeVerification = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator(
+  .inputValidator(
     z.object({
       merchantRef: z.string().min(3).max(80),
       shopId: z.string().min(1),
@@ -68,7 +68,7 @@ export const finalizeVerification = createServerFn({ method: "POST" })
 
 export const getVerificationFileUrl = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator(z.object({ path: z.string().min(1).max(300), shopId: z.string().min(1) }))
+  .inputValidator(z.object({ path: z.string().min(1).max(300), shopId: z.string().min(1) }))
   .handler(async ({ context, data }) => {
     const be = await import("./backend.server");
     return be.getSignedFileUrl(data.path, data.shopId, context.uid);

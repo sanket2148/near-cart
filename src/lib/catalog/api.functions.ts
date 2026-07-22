@@ -17,35 +17,35 @@ export const getCategories = createServerFn({ method: "GET" }).handler(async () 
 });
 
 export const getNearbyShops = createServerFn({ method: "GET" })
-  .validator(NearbyShopsSchema)
+  .inputValidator(NearbyShopsSchema)
   .handler(async ({ data }) => {
     const be = await import("./backend.server");
     return be.getNearbyShops(data);
   });
 
 export const checkServiceability = createServerFn({ method: "GET" })
-  .validator(z.object({ lat: z.number(), lng: z.number() }))
+  .inputValidator(z.object({ lat: z.number(), lng: z.number() }))
   .handler(async ({ data }) => {
     const be = await import("./backend.server");
     return be.checkServiceability(data.lat, data.lng);
   });
 
 export const getShop = createServerFn({ method: "GET" })
-  .validator(z.object({ shopId: z.string().min(1) }))
+  .inputValidator(z.object({ shopId: z.string().min(1) }))
   .handler(async ({ data }) => {
     const be = await import("./backend.server");
     return be.getShop(data.shopId);
   });
 
 export const getShopProducts = createServerFn({ method: "GET" })
-  .validator(z.object({ shopId: z.string().min(1) }))
+  .inputValidator(z.object({ shopId: z.string().min(1) }))
   .handler(async ({ data }) => {
     const be = await import("./backend.server");
     return be.getShopProducts(data.shopId);
   });
 
 export const searchCatalog = createServerFn({ method: "GET" })
-  .validator(z.object({ query: z.string().min(1) }))
+  .inputValidator(z.object({ query: z.string().min(1) }))
   .handler(async ({ data }) => {
     const be = await import("./backend.server");
     const [shops, products] = await Promise.all([

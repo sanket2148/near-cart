@@ -4,7 +4,7 @@ import { authMiddleware } from "@/lib/auth-session/middleware";
 
 export const verifyPayment = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator(
+  .inputValidator(
     z.object({
       orderId: z.string().min(1),
       razorpayOrderId: z.string().min(1),

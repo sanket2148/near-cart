@@ -65,7 +65,7 @@ export const listWishlist = createServerFn({ method: "GET" })
 
 export const isWishlisted = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
-  .validator(z.object({ productId: z.string().min(1) }))
+  .inputValidator(z.object({ productId: z.string().min(1) }))
   .handler(async ({ context, data }) => {
     const { data: row, error } = await context.scopedClient
       .from("wishlists")
@@ -78,7 +78,7 @@ export const isWishlisted = createServerFn({ method: "GET" })
 
 export const addToWishlist = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator(z.object({ productId: z.string().min(1) }))
+  .inputValidator(z.object({ productId: z.string().min(1) }))
   .handler(async ({ context, data }) => {
     const { error } = await context.scopedClient
       .from("wishlists")
@@ -88,7 +88,7 @@ export const addToWishlist = createServerFn({ method: "POST" })
 
 export const removeFromWishlist = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator(z.object({ productId: z.string().min(1) }))
+  .inputValidator(z.object({ productId: z.string().min(1) }))
   .handler(async ({ context, data }) => {
     const { error } = await context.scopedClient
       .from("wishlists")

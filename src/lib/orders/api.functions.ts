@@ -8,7 +8,7 @@ const OrderItemSchema = z.object({
 });
 
 export const quoteOrder = createServerFn({ method: "GET" })
-  .validator(
+  .inputValidator(
     z.object({
       shopId: z.string().min(1),
       items: z.array(OrderItemSchema),
@@ -26,7 +26,7 @@ export const quoteOrder = createServerFn({ method: "GET" })
 // (see plan/tasks/decisions.md, Phase 3 of the authorization-hardening plan).
 export const placeOrder = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator(
+  .inputValidator(
     z.object({
       shopId: z.string().min(1),
       items: z.array(OrderItemSchema).min(1),
@@ -51,7 +51,7 @@ export const listOrders = createServerFn({ method: "GET" })
 
 export const getOrder = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
-  .validator(z.object({ orderId: z.string().min(1) }))
+  .inputValidator(z.object({ orderId: z.string().min(1) }))
   .handler(async ({ context, data }) => {
     const be = await import("./backend.server");
     return be.getOrder(data.orderId, context.uid);
@@ -59,7 +59,7 @@ export const getOrder = createServerFn({ method: "GET" })
 
 export const cancelOrder = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator(z.object({ orderId: z.string().min(1) }))
+  .inputValidator(z.object({ orderId: z.string().min(1) }))
   .handler(async ({ context, data }) => {
     const be = await import("./backend.server");
     return be.cancelOrder(data.orderId, context.uid);

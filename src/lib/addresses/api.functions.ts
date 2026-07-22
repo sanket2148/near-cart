@@ -72,7 +72,7 @@ const AddressInput = z.object({
 
 export const addAddress = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator(AddressInput)
+  .inputValidator(AddressInput)
   .handler(async ({ context, data }) => {
     const { data: row, error } = await context.scopedClient
       .from("addresses")
@@ -95,7 +95,7 @@ export const addAddress = createServerFn({ method: "POST" })
 
 export const updateAddress = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator(AddressInput.extend({ id: z.string().min(1) }))
+  .inputValidator(AddressInput.extend({ id: z.string().min(1) }))
   .handler(async ({ context, data }) => {
     const { id, ...rest } = data;
     const { error } = await context.scopedClient
@@ -116,7 +116,7 @@ export const updateAddress = createServerFn({ method: "POST" })
 
 export const deleteAddress = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator(z.object({ id: z.string().min(1) }))
+  .inputValidator(z.object({ id: z.string().min(1) }))
   .handler(async ({ context, data }) => {
     const { error } = await context.scopedClient.from("addresses").delete().eq("id", data.id);
     if (error) throw new Error(error.message);
@@ -124,7 +124,7 @@ export const deleteAddress = createServerFn({ method: "POST" })
 
 export const setDefaultAddress = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator(z.object({ id: z.string().min(1) }))
+  .inputValidator(z.object({ id: z.string().min(1) }))
   .handler(async ({ context, data }) => {
     // RLS scopes both statements to this user's own rows already; clearing
     // every row first (rather than a conditional) keeps this correct even if

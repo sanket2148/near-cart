@@ -24,7 +24,7 @@ export const getProfile = createServerFn({ method: "GET" })
 
 export const updateProfile = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator(z.object({ fullName: z.string().trim().max(80) }))
+  .inputValidator(z.object({ fullName: z.string().trim().max(80) }))
   .handler(async ({ context, data }) => {
     const { error } = await context.scopedClient
       .from("users")
