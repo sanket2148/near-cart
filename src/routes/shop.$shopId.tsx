@@ -8,7 +8,6 @@ import { ProductCard } from "@/components/ProductCard";
 import { ShopReviews } from "@/components/ShopReviews";
 import { CartBar } from "@/components/CartBar";
 import { getShop, getShopProducts } from "@/lib/catalog/api.functions";
-import type { CatalogProduct } from "@/lib/catalog/backend.server";
 import { listWishlist, addToWishlist, removeFromWishlist } from "@/lib/wishlist/api.functions";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
