@@ -25,7 +25,7 @@ export type ShopHourEntry = { dayOfWeek: number; openTime: string; closeTime: st
 
 /** Public — no login needed to see a shop's hours. Absence of a row for a day means closed that day. */
 export const getShopHours = createServerFn({ method: "GET" })
-  .validator(z.object({ shopId: z.string().min(1) }))
+  .inputValidator(z.object({ shopId: z.string().min(1) }))
   .handler(async ({ data }): Promise<ShopHourEntry[]> => {
     const { data: rows, error } = await anonClient()
       .from("shop_hours")
@@ -54,7 +54,7 @@ const HourEntrySchema = z.object({
  */
 export const setShopHours = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator(z.object({ shopId: z.string().min(1), hours: z.array(HourEntrySchema).max(7) }))
+  .inputValidator(z.object({ shopId: z.string().min(1), hours: z.array(HourEntrySchema).max(7) }))
   .handler(async ({ context, data }) => {
     const { error: delErr } = await context.scopedClient
       .from("shop_hours")

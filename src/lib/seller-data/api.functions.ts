@@ -27,7 +27,7 @@ export const getMyShop = createServerFn({ method: "GET" })
 
 export const createShop = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator(
+  .inputValidator(
     z.object({
       name: z.string().min(1),
       businessType: z.string().min(1),
@@ -59,7 +59,7 @@ const ShopPatchSchema = z.object({
 
 export const updateShop = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator(z.object({ shopId: z.string().min(1), patch: ShopPatchSchema }))
+  .inputValidator(z.object({ shopId: z.string().min(1), patch: ShopPatchSchema }))
   .handler(async ({ context, data }) => {
     const be = await import("./backend.server");
     return be.updateShop(data.shopId, context.uid, data.patch);
@@ -75,7 +75,7 @@ const LevelStatusSchema = z.enum([
 
 export const syncVerificationSummary = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator(
+  .inputValidator(
     z.object({
       shopId: z.string().min(1),
       summary: z.object({
@@ -105,7 +105,7 @@ export const syncVerificationSummary = createServerFn({ method: "POST" })
 
 export const getMyProducts = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
-  .validator(z.object({ shopId: z.string().min(1) }))
+  .inputValidator(z.object({ shopId: z.string().min(1) }))
   .handler(async ({ context, data }) => {
     const be = await import("./backend.server");
     return be.getMyProducts(data.shopId, context.uid);
@@ -113,7 +113,7 @@ export const getMyProducts = createServerFn({ method: "GET" })
 
 export const addProduct = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator(z.object({ shopId: z.string().min(1), input: ProductInputSchema }))
+  .inputValidator(z.object({ shopId: z.string().min(1), input: ProductInputSchema }))
   .handler(async ({ context, data }) => {
     const be = await import("./backend.server");
     return be.addProduct(data.shopId, context.uid, data.input);
@@ -123,7 +123,7 @@ const ProductPatchSchema = ProductInputSchema.partial();
 
 export const updateProduct = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator(z.object({ productId: z.string().min(1), patch: ProductPatchSchema }))
+  .inputValidator(z.object({ productId: z.string().min(1), patch: ProductPatchSchema }))
   .handler(async ({ context, data }) => {
     const be = await import("./backend.server");
     return be.updateProduct(data.productId, context.uid, data.patch);
@@ -131,7 +131,7 @@ export const updateProduct = createServerFn({ method: "POST" })
 
 export const removeProduct = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator(z.object({ productId: z.string().min(1) }))
+  .inputValidator(z.object({ productId: z.string().min(1) }))
   .handler(async ({ context, data }) => {
     const be = await import("./backend.server");
     return be.removeProduct(data.productId, context.uid);
@@ -139,7 +139,7 @@ export const removeProduct = createServerFn({ method: "POST" })
 
 export const toggleStock = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator(z.object({ productId: z.string().min(1) }))
+  .inputValidator(z.object({ productId: z.string().min(1) }))
   .handler(async ({ context, data }) => {
     const be = await import("./backend.server");
     return be.toggleStock(data.productId, context.uid);
@@ -147,7 +147,7 @@ export const toggleStock = createServerFn({ method: "POST" })
 
 export const getShopOrders = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
-  .validator(z.object({ shopId: z.string().min(1) }))
+  .inputValidator(z.object({ shopId: z.string().min(1) }))
   .handler(async ({ context, data }) => {
     const be = await import("./backend.server");
     return be.getShopOrders(data.shopId, context.uid);
@@ -155,7 +155,7 @@ export const getShopOrders = createServerFn({ method: "GET" })
 
 export const acceptOrder = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator(z.object({ orderId: z.string().min(1) }))
+  .inputValidator(z.object({ orderId: z.string().min(1) }))
   .handler(async ({ context, data }) => {
     const be = await import("./backend.server");
     return be.acceptOrder(data.orderId, context.uid);
@@ -163,7 +163,7 @@ export const acceptOrder = createServerFn({ method: "POST" })
 
 export const rejectOrder = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator(z.object({ orderId: z.string().min(1) }))
+  .inputValidator(z.object({ orderId: z.string().min(1) }))
   .handler(async ({ context, data }) => {
     const be = await import("./backend.server");
     return be.rejectOrder(data.orderId, context.uid);
@@ -173,7 +173,7 @@ export const rejectOrder = createServerFn({ method: "POST" })
 // order's real DB status inside advanceOrder, not accepted from the client.
 export const advanceOrder = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator(z.object({ orderId: z.string().min(1) }))
+  .inputValidator(z.object({ orderId: z.string().min(1) }))
   .handler(async ({ context, data }) => {
     const be = await import("./backend.server");
     return be.advanceOrder(data.orderId, context.uid);
@@ -188,7 +188,7 @@ export const getAvailablePartners = createServerFn({ method: "GET" })
 
 export const offerToPartner = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator(z.object({ orderId: z.string().min(1), partnerId: z.string().min(1) }))
+  .inputValidator(z.object({ orderId: z.string().min(1), partnerId: z.string().min(1) }))
   .handler(async ({ context, data }) => {
     const be = await import("./backend.server");
     return be.offerToPartner(data.orderId, context.uid, data.partnerId);
@@ -202,7 +202,7 @@ const UploadImageSchema = z.object({
 
 export const uploadShopLogo = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator(UploadImageSchema.extend({ shopId: z.string().min(1) }))
+  .inputValidator(UploadImageSchema.extend({ shopId: z.string().min(1) }))
   .handler(async ({ context, data }) => {
     const be = await import("./backend.server");
     const url = await be.uploadShopLogo(data.shopId, context.uid, data.dataBase64, data.mimeType);
@@ -211,7 +211,7 @@ export const uploadShopLogo = createServerFn({ method: "POST" })
 
 export const uploadProductImage = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator(UploadImageSchema.extend({ productId: z.string().min(1) }))
+  .inputValidator(UploadImageSchema.extend({ productId: z.string().min(1) }))
   .handler(async ({ context, data }) => {
     const be = await import("./backend.server");
     const url = await be.uploadProductImage(

@@ -2,14 +2,14 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
 export const requestOtp = createServerFn({ method: "POST" })
-  .validator(z.object({ email: z.string().email() }))
+  .inputValidator(z.object({ email: z.string().email() }))
   .handler(async ({ data }) => {
     const be = await import("./backend.server");
     await be.requestOtp(data.email);
   });
 
 export const verifyOtp = createServerFn({ method: "POST" })
-  .validator(z.object({ email: z.string().email(), code: z.string().min(4).max(10) }))
+  .inputValidator(z.object({ email: z.string().email(), code: z.string().min(4).max(10) }))
   .handler(async ({ data }) => {
     const be = await import("./backend.server");
     const cookies = await import("./cookies.server");

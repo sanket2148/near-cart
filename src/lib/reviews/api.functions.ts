@@ -4,7 +4,7 @@ import { authMiddleware } from "@/lib/auth-session/middleware";
 
 export const getReviewableOrder = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
-  .validator(z.object({ orderId: z.string().min(1) }))
+  .inputValidator(z.object({ orderId: z.string().min(1) }))
   .handler(async ({ context, data }) => {
     const be = await import("./backend.server");
     return be.getReviewableOrder(data.orderId, context.uid);
@@ -12,7 +12,7 @@ export const getReviewableOrder = createServerFn({ method: "GET" })
 
 export const getMyReviewForOrder = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
-  .validator(z.object({ orderId: z.string().min(1) }))
+  .inputValidator(z.object({ orderId: z.string().min(1) }))
   .handler(async ({ context, data }) => {
     const be = await import("./backend.server");
     return be.getMyReviewForOrder(data.orderId, context.uid);
@@ -20,7 +20,7 @@ export const getMyReviewForOrder = createServerFn({ method: "GET" })
 
 export const submitReview = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator(
+  .inputValidator(
     z.object({
       orderId: z.string().min(1),
       shopRating: z.number().int().min(1).max(5),
@@ -35,7 +35,7 @@ export const submitReview = createServerFn({ method: "POST" })
 
 // Public — no login needed to read reviews, matches offers/catalog's posture.
 export const listShopReviews = createServerFn({ method: "GET" })
-  .validator(z.object({ shopId: z.string().min(1) }))
+  .inputValidator(z.object({ shopId: z.string().min(1) }))
   .handler(async ({ data }) => {
     const be = await import("./backend.server");
     return be.listShopReviews(data.shopId);

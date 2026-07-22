@@ -18,7 +18,7 @@ export const getMyProfile = createServerFn({ method: "GET" })
 
 export const createProfile = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator(
+  .inputValidator(
     z.object({ name: z.string().min(1), vehicle: z.string().min(1), area: z.string().min(1) }),
   )
   .handler(async ({ context, data }) => {
@@ -46,7 +46,7 @@ export const getMyJobs = createServerFn({ method: "GET" })
 
 export const acceptJob = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator(z.object({ assignmentId: z.string().min(1) }))
+  .inputValidator(z.object({ assignmentId: z.string().min(1) }))
   .handler(async ({ context, data }) => {
     const be = await import("./backend.server");
     return be.acceptJob(data.assignmentId, context.uid);
@@ -54,7 +54,7 @@ export const acceptJob = createServerFn({ method: "POST" })
 
 export const declineJob = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator(z.object({ assignmentId: z.string().min(1) }))
+  .inputValidator(z.object({ assignmentId: z.string().min(1) }))
   .handler(async ({ context, data }) => {
     const be = await import("./backend.server");
     return be.declineJob(data.assignmentId, context.uid);
@@ -64,7 +64,7 @@ export const declineJob = createServerFn({ method: "POST" })
 // assignment/order's real DB status inside advanceJob.
 export const advanceJob = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .validator(z.object({ assignmentId: z.string().min(1) }))
+  .inputValidator(z.object({ assignmentId: z.string().min(1) }))
   .handler(async ({ context, data }) => {
     const be = await import("./backend.server");
     return be.advanceJob(data.assignmentId, context.uid);

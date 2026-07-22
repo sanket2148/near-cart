@@ -23,7 +23,7 @@ export const listShopsForReview = createServerFn({ method: "GET" })
 
 export const approveShop = createServerFn({ method: "POST" })
   .middleware([adminMiddleware])
-  .validator(z.object({ shopId: z.string().min(1) }))
+  .inputValidator(z.object({ shopId: z.string().min(1) }))
   .handler(async ({ data }) => {
     const be = await import("./backend.server");
     return be.approveShop(data.shopId);
@@ -31,7 +31,7 @@ export const approveShop = createServerFn({ method: "POST" })
 
 export const rejectShop = createServerFn({ method: "POST" })
   .middleware([adminMiddleware])
-  .validator(z.object({ shopId: z.string().min(1) }))
+  .inputValidator(z.object({ shopId: z.string().min(1) }))
   .handler(async ({ data }) => {
     const be = await import("./backend.server");
     return be.rejectShop(data.shopId);
@@ -48,7 +48,7 @@ export const listAllShops = createServerFn({ method: "GET" })
 
 export const suspendShop = createServerFn({ method: "POST" })
   .middleware([adminMiddleware])
-  .validator(z.object({ shopId: z.string().min(1) }))
+  .inputValidator(z.object({ shopId: z.string().min(1) }))
   .handler(async ({ data }) => {
     const be = await import("./backend.server");
     return be.suspendShop(data.shopId);
@@ -56,7 +56,7 @@ export const suspendShop = createServerFn({ method: "POST" })
 
 export const reactivateShop = createServerFn({ method: "POST" })
   .middleware([adminMiddleware])
-  .validator(z.object({ shopId: z.string().min(1) }))
+  .inputValidator(z.object({ shopId: z.string().min(1) }))
   .handler(async ({ data }) => {
     const be = await import("./backend.server");
     return be.reactivateShop(data.shopId);
@@ -73,7 +73,7 @@ export const listAllPartners = createServerFn({ method: "GET" })
 
 export const suspendPartner = createServerFn({ method: "POST" })
   .middleware([adminMiddleware])
-  .validator(z.object({ partnerId: z.string().min(1) }))
+  .inputValidator(z.object({ partnerId: z.string().min(1) }))
   .handler(async ({ data }) => {
     const be = await import("./backend.server");
     return be.suspendPartner(data.partnerId);
@@ -81,7 +81,7 @@ export const suspendPartner = createServerFn({ method: "POST" })
 
 export const reactivatePartner = createServerFn({ method: "POST" })
   .middleware([adminMiddleware])
-  .validator(z.object({ partnerId: z.string().min(1) }))
+  .inputValidator(z.object({ partnerId: z.string().min(1) }))
   .handler(async ({ data }) => {
     const be = await import("./backend.server");
     return be.reactivatePartner(data.partnerId);
@@ -91,7 +91,7 @@ export const reactivatePartner = createServerFn({ method: "POST" })
 
 export const listAllOrders = createServerFn({ method: "GET" })
   .middleware([adminMiddleware])
-  .validator(z.object({ status: z.string().optional() }))
+  .inputValidator(z.object({ status: z.string().optional() }))
   .handler(async ({ data }) => {
     const be = await import("./backend.server");
     return be.listAllOrders(data.status);
@@ -99,7 +99,7 @@ export const listAllOrders = createServerFn({ method: "GET" })
 
 export const cancelOrder = createServerFn({ method: "POST" })
   .middleware([adminMiddleware])
-  .validator(z.object({ orderId: z.string().min(1) }))
+  .inputValidator(z.object({ orderId: z.string().min(1) }))
   .handler(async ({ data }) => {
     const be = await import("./backend.server");
     return be.cancelOrder(data.orderId);
