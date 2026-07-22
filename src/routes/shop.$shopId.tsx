@@ -8,6 +8,7 @@ import { ProductCard } from "@/components/ProductCard";
 import { ShopReviews } from "@/components/ShopReviews";
 import { CartBar } from "@/components/CartBar";
 import { getShop, getShopProducts } from "@/lib/catalog/api.functions";
+import type { Product } from "@/lib/data";
 import { listWishlist, addToWishlist, removeFromWishlist } from "@/lib/wishlist/api.functions";
 import { useAuth } from "@/lib/auth";
 import { cn } from "@/lib/utils";
@@ -39,7 +40,7 @@ export const Route = createFileRoute("/shop/$shopId")({
 });
 
 function ShopPage() {
-  const { shop, products } = Route.useLoaderData();
+  const { shop, products } = Route.useLoaderData() as { shop: any; products: Product[] };
   const [query, setQuery] = useState("");
   const { user } = useAuth();
   const queryClient = useQueryClient();
