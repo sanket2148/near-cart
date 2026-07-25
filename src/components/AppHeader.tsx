@@ -39,16 +39,18 @@ export function AppHeader({
           </span>
         </Link>
 
-        <button
-          onClick={onLocationClick}
-          className="flex min-w-0 flex-1 items-center justify-center gap-1 text-sm text-muted-foreground"
-        >
-          <MapPin className="h-4 w-4 shrink-0 text-primary" />
-          <span className="truncate font-medium text-foreground">
-            {subtitle ?? state.label ?? "Set delivery location"}
-          </span>
-          <ChevronDown className="h-4 w-4 shrink-0" />
-        </button>
+        <div className="flex min-w-0 flex-1 justify-center">
+          <button
+            onClick={onLocationClick}
+            className="flex min-w-0 max-w-full items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-sm text-muted-foreground shadow-sm transition-colors hover:border-primary/40"
+          >
+            <MapPin className="h-4 w-4 shrink-0 text-primary" />
+            <span className="truncate font-medium text-foreground">
+              {subtitle ?? state.label ?? "Set delivery location"}
+            </span>
+            <ChevronDown className="h-4 w-4 shrink-0" />
+          </button>
+        </div>
 
         <Link
           to="/cart"
