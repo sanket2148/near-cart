@@ -165,6 +165,15 @@ Each phase replaces one domain's localStorage mock with real Supabase-backed ser
 - [ ] Import more cities beyond the current Bengaluru-area OSM coverage; `way`/`relation` OSM geometries (not just point nodes) still unimported; `searchProducts` still has no explicit row limit (same class of bug as the 1000-row `getNearbyShops` cap that was fixed).
 - [ ] No password-reset flow exists — deliberately deferred when email OTP was dropped in favor of email+password, since building it would reintroduce an email-deliverability dependency.
 
+## Sidebar links + home/shop-page UI fixes (2026-07-25, see decisions.md)
+
+- [x] **Sidebar links to shop/delivery-partner onboarding** — `/seller`/`/partner` were only reachable by URL; added a "Sell & Deliver" nav section.
+- [x] **Home-page fixes from a pasted external UX/UI audit** — "Open now" filter toggle, a neutral "New" badge (instead of `★ 0`) for shops with `ratingCount === 0`, and real visual weight on the location-selector pill.
+- [~] **Two audit items confirmed real but deferred**: the hero image's garbled AI-generated signage text (no image-gen tool available) and collapsing the persistent sidebar into a drawer (bigger architecture change than a bug fix, sidebar already has its own collapse-to-icons toggle).
+- [x] **Shop detail page: Menu/Reviews tabs + a real sidebar direction card** — grounded in Zomato's actual restaurant-page HTML (user pasted the raw source, then screenshots) cross-checked against NearCart's real data before building anything. Sticky tab bar splits the old single-scroll layout; desktop gets a `lg:sticky` sidebar with a read-only map (`LocationPinMap`'s new `interactive={false}` mode), the real address, and Copy/Direction buttons using real `shop.lat`/`lng`.
+- [ ] **Not built, real data gap**: a photo gallery/split hero like Zomato's — `shop_photos` table exists in the schema but nothing writes to it anywhere (no upload UI in the seller flow) and `getShop` never reads it. Building the gallery UI now would mean fabricating images; needs a real shop-photo-upload feature first (natural companion to the existing `uploadShopLogo`/`uploadProductImage` pattern in `seller-data/`).
+- [ ] **Not applicable**: Zomato's separate Dining/Delivery rating badges and its icon+label "More Info" amenities card (delivery-only/seating/etc.) don't map to NearCart — it's delivery-only with one rating pipeline and no boolean amenity fields on `shops`. Skipped rather than faked.
+
 ## Cross-Platform Mobile Apps (React Native + Expo)
 
 - [ ] Set up monorepo structure (Web app and Mobile apps sharing packages/) — `mobile/` exists alongside the web app but no shared `packages/`, no workspaces config
