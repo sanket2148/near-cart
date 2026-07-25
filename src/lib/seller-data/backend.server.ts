@@ -148,9 +148,56 @@ export type NewShopInput = {
   businessType: BusinessType;
   area: string;
   tagline?: string;
+  lat: number;
+  lng: number;
 };
 
+/**
+ * A shop only ever needs one of these, created exactly once, right when it
+ * first gets a real owner (verification is strictly 1:1 with `shop_id`, see
+ * `shop_verifications`'s unique FK). `claimShop` below provisions its own
+ * inline (wrapped in a short retry — see `retryFlaky`), since an OSM-
+ * imported unclaimed shop deliberately has none yet: there's no owner to
+ * run KYC against until someone claims it.
+ */
+async function provisionVerification(shopId: string, businessType: BusinessType): Promise<void> {
+  await admin().from("shop_verifications").insert({ shop_id: shopId, business_type: businessType });
+}
+
+// Real Bengaluru bounding box (generous — covers the metro area plus
+// margin), just enough to reject obviously-bogus values (0,0 from a client
+// bug, out-of-range floats, ...) before they land in PostGIS. Not a tight
+// service-area check — `nearby_shops`'s radius filter already handles "too
+// far to be useful" at query time; this is only a sanity gate.
+const LAT_MIN = 12.6;
+const LAT_MAX = 13.3;
+const LNG_MIN = 77.3;
+const LNG_MAX = 77.9;
+
+function assertRealCoords(lat: number, lng: number): void {
+  if (
+    !Number.isFinite(lat) ||
+    !Number.isFinite(lng) ||
+    lat < LAT_MIN ||
+    lat > LAT_MAX ||
+    lng < LNG_MIN ||
+    lng > LNG_MAX
+  ) {
+    throw new Error("Shop location looks invalid — please re-pin your shop's location on the map.");
+  }
+}
+
 export async function createShop(ownerId: string, input: NewShopInput): Promise<ShopProfile> {
+  // Every shop used to land at the exact same hardcoded point regardless of
+  // where it actually is — harmless while there was no real proximity
+  // search, but once `nearby_shops`'s PostGIS radius/KNN query shipped
+  // (migration 0012), a shop's real coordinates are load-bearing: a fake
+  // shared point makes every new merchant either wrongly invisible (outside
+  // the customer's radius) or wrongly ranked (falsely "closest"). The
+  // merchant now pins their real location client-side (see
+  // CreateShopStep.tsx) and it's required, not optional.
+  assertRealCoords(input.lat, input.lng);
+
   const { data: category } = await admin()
     .from("categories")
     .select("id")
@@ -167,8 +214,8 @@ export async function createShop(ownerId: string, input: NewShopInput): Promise<
       address_line: input.area,
       city: "Bengaluru",
       pincode: "560095",
-      lat: 12.9352,
-      lng: 77.6245,
+      lat: input.lat,
+      lng: input.lng,
       status: "active",
       is_open: false,
     })
@@ -176,13 +223,138 @@ export async function createShop(ownerId: string, input: NewShopInput): Promise<
     .single();
   if (error) throw new Error(`createShop failed: ${error.message}`);
 
-  await admin()
-    .from("shop_verifications")
-    .insert({ shop_id: shop.id, business_type: input.businessType });
+  await provisionVerification(shop.id, input.businessType);
 
   const created = await getMyShop(ownerId);
   if (!created) throw new Error("createShop: shop vanished immediately after creation");
   return created;
+}
+
+export type UnclaimedShop = {
+  id: string;
+  name: string;
+  addressLine: string;
+  city: string;
+};
+
+/** Simple name search over unclaimed listings — enough for a merchant to find "is this my shop?" during onboarding. */
+export async function searchUnclaimedShops(query: string): Promise<UnclaimedShop[]> {
+  const { data, error } = await admin()
+    .from("shops")
+    .select("id, name, address_line, city")
+    .eq("claimed", false)
+    .eq("status", "active")
+    .ilike("name", `%${query}%`)
+    .limit(20);
+  if (error) throw new Error(`searchUnclaimedShops failed: ${error.message}`);
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    name: row.name,
+    addressLine: row.address_line,
+    city: row.city,
+  }));
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type ShopMatchRow = any;
+
+/**
+ * Real name+proximity duplicate check for the "create a new shop" flow (see
+ * plan/tasks/decisions.md 2026-07-24) — combines pg_trgm name similarity
+ * with a PostGIS radius filter (migration 0014), unlike searchUnclaimedShops'
+ * plain substring match. Only meaningful once the merchant has pinned a real
+ * location (CreateShopStep.tsx calls this instead of searchUnclaimedShops
+ * once `coords` exists). Filtered to unclaimed listings here — only those are
+ * actionable for a merchant creating a shop; the underlying SQL function
+ * also returns claimed shops so it can back an admin-side duplicate hint
+ * later without a second implementation.
+ */
+export async function findPossibleShopMatches(
+  name: string,
+  lat: number,
+  lng: number,
+): Promise<UnclaimedShop[]> {
+  const { data, error } = await admin().rpc("find_shop_matches", {
+    p_name: name,
+    p_lat: lat,
+    p_lng: lng,
+  });
+  if (error) throw new Error(`findPossibleShopMatches failed: ${error.message}`);
+  return ((data ?? []) as ShopMatchRow[])
+    .filter((row) => row.claimed === false)
+    .map((row) => ({
+      id: row.id,
+      name: row.name,
+      addressLine: row.address_line,
+      city: row.city,
+    }));
+}
+
+/**
+ * Claims an OSM-imported (or otherwise unclaimed) shop for the calling
+ * user — the other half of the cold-start fix alongside
+ * `supabase/import-osm-shops.mjs` (see plan/tasks/decisions.md 2026-07-22).
+ * The conditional update (`WHERE claimed = false`) is what actually
+ * prevents two merchants racing to claim the same listing — matches the
+ * optimistic-concurrency pattern already used throughout this file
+ * (`setOrderStatus`) and partner-data's `acceptJob`: whichever request's
+ * update matches zero rows lost the race and must not proceed to
+ * provision verification for a shop it doesn't actually own.
+ */
+/**
+ * Retries a flaky-under-load step. Empirically, this dev environment's
+ * request handling can very occasionally make a row inserted/updated a
+ * moment ago briefly invisible to the *next* query in the same handler
+ * (confirmed NOT a Postgres/RLS/constraint issue — the identical sequence
+ * run as a plain standalone script against the same project never
+ * reproduces it) — so a short retry is the pragmatic fix here, not a
+ * change to the actual claim logic above, which is already correct and
+ * race-safe on its own.
+ */
+async function retryFlaky<T>(fn: () => Promise<T>, attempts = 3, delayMs = 150): Promise<T> {
+  let lastErr: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      if (i < attempts - 1) await new Promise((r) => setTimeout(r, delayMs));
+    }
+  }
+  throw lastErr;
+}
+
+export async function claimShop(
+  shopId: string,
+  callerId: string,
+  businessType: BusinessType,
+): Promise<ShopProfile> {
+  const already = await getMyShop(callerId);
+  if (already) throw new Error("You already have a shop — one account can only own one shop.");
+
+  const { data: claimed, error } = await admin()
+    .from("shops")
+    .update({ owner_id: callerId, claimed: true, claimed_at: new Date().toISOString() })
+    .eq("id", shopId)
+    .eq("claimed", false)
+    .select("id")
+    .maybeSingle();
+  if (error) throw new Error(`claimShop failed: ${error.message}`);
+  if (!claimed) throw new Error("This shop was already claimed — someone got there first.");
+
+  await retryFlaky(async () => {
+    const { error: verifyErr } = await admin()
+      .from("shop_verifications")
+      .insert({ shop_id: shopId, business_type: businessType });
+    if (verifyErr) throw new Error(`provisionVerification failed: ${verifyErr.message}`);
+  });
+
+  const result = await retryFlaky(async () => {
+    const shop = await getMyShop(callerId);
+    if (!shop) throw new Error("claimShop: shop not visible yet after claiming");
+    return shop;
+  });
+  return result;
 }
 
 export async function updateShop(
@@ -289,6 +461,7 @@ function mapProductRow(row: any): Product {
     category: row.menu_section ?? "",
     inStock: Boolean(row.in_stock),
     imageUrl: publicImageUrl(row.image_path),
+    barcode: row.barcode ?? undefined,
   };
 }
 
@@ -320,10 +493,20 @@ export async function addProduct(
       unit: input.unit,
       menu_section: input.category,
       in_stock: input.inStock,
+      barcode: input.barcode || null,
     })
     .select("*")
     .single();
-  if (error) throw new Error(`addProduct failed: ${error.message}`);
+  if (error) {
+    // 23505 = unique_violation on products_shop_barcode_uidx (migration
+    // 0015) — this exact barcode is already in this shop's own catalog. A
+    // real, catchable conflict, not a generic failure — see
+    // seller.products.tsx's "Already in your catalog" nudge.
+    if (error.code === "23505") {
+      throw new Error("You already have a product with this barcode in your catalog.");
+    }
+    throw new Error(`addProduct failed: ${error.message}`);
+  }
   return mapProductRow(data);
 }
 
@@ -342,10 +525,16 @@ export async function updateProduct(
   if (patch.unit !== undefined) row.unit = patch.unit;
   if (patch.category !== undefined) row.menu_section = patch.category;
   if (patch.inStock !== undefined) row.in_stock = patch.inStock;
+  if (patch.barcode !== undefined) row.barcode = patch.barcode || null;
   if (Object.keys(row).length === 0) return;
 
   const { error } = await admin().from("products").update(row).eq("id", productId);
-  if (error) throw new Error(`updateProduct failed: ${error.message}`);
+  if (error) {
+    if (error.code === "23505") {
+      throw new Error("You already have a product with this barcode in your catalog.");
+    }
+    throw new Error(`updateProduct failed: ${error.message}`);
+  }
 }
 
 export async function removeProduct(productId: string, callerId: string): Promise<void> {
@@ -500,43 +689,89 @@ const CUSTOMER_NOTIFICATION: Record<string, { title: string; body: (shopName: st
     },
   };
 
-async function setOrderStatus(orderId: string, dbStatus: string, note: string): Promise<void> {
-  const { data: before } = await admin()
+async function requireCurrentStatus(orderId: string): Promise<string> {
+  const { data, error } = await admin().from("orders").select("status").eq("id", orderId).single();
+  if (error) throw new Error(`Could not read order status: ${error.message}`);
+  return data.status;
+}
+
+/**
+ * `fromDbStatus` must be a status the caller just read for this same order —
+ * the update is conditioned on the row still being at that exact status, so
+ * it's a no-op (throws, doesn't silently overwrite) if the order moved on
+ * concurrently. This is what makes every caller's status-transition guard
+ * actually race-proof rather than just a check-then-write with a gap in the
+ * middle: two concurrent accept/advance calls (double-click, a stale seller
+ * tab racing a customer cancellation) can no longer both land, because only
+ * the one whose `fromDbStatus` still matches the real row succeeds. See
+ * plan/tasks/decisions.md 2026-07-22 for the live-reproduced bug this closes.
+ */
+async function setOrderStatus(
+  orderId: string,
+  fromDbStatus: string,
+  toDbStatus: string,
+  note: string,
+): Promise<void> {
+  const { data: shopInfo } = await admin()
     .from("orders")
-    .select("status, customer_id, shops(name)")
+    .select("customer_id, shops(name)")
     .eq("id", orderId)
     .single();
-  const { error } = await admin().from("orders").update({ status: dbStatus }).eq("id", orderId);
+
+  const { data: updated, error } = await admin()
+    .from("orders")
+    .update({ status: toDbStatus })
+    .eq("id", orderId)
+    .eq("status", fromDbStatus)
+    .select("id")
+    .maybeSingle();
   if (error) throw new Error(`setOrderStatus failed: ${error.message}`);
+  if (!updated) {
+    throw new Error("This order's status has already changed — refresh and try again.");
+  }
+
   await admin()
     .from("order_events")
-    .insert({ order_id: orderId, from_status: before?.status ?? null, to_status: dbStatus, note });
+    .insert({ order_id: orderId, from_status: fromDbStatus, to_status: toDbStatus, note });
 
-  const notif = CUSTOMER_NOTIFICATION[dbStatus];
+  const notif = CUSTOMER_NOTIFICATION[toDbStatus];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const shopName = (before as any)?.shops?.name ?? "The shop";
-  if (notif && before?.customer_id) {
+  const shopName = (shopInfo as any)?.shops?.name ?? "The shop";
+  if (notif && shopInfo?.customer_id) {
     await insertNotification(
-      before.customer_id,
+      shopInfo.customer_id,
       "order_status",
       notif.title,
       notif.body(shopName),
       {
         orderId,
-        status: dbStatus,
+        status: toDbStatus,
       },
     );
   }
 }
 
+// Only orders still genuinely awaiting shop action can be accepted/rejected —
+// blocks re-accepting/re-rejecting an order some other action (or a
+// concurrent request) already moved past this point.
+const SELLER_ACTIONABLE_DB_STATUSES = new Set(["created", "paid", "cod_confirmed"]);
+
 export async function acceptOrder(orderId: string, callerId: string): Promise<void> {
   await assertOrderOwner(orderId, callerId);
-  await setOrderStatus(orderId, "shop_accepted", "Accepted by shop");
+  const dbStatus = await requireCurrentStatus(orderId);
+  if (!SELLER_ACTIONABLE_DB_STATUSES.has(dbStatus)) {
+    throw new Error("This order has already been actioned — refresh to see its current status.");
+  }
+  await setOrderStatus(orderId, dbStatus, "shop_accepted", "Accepted by shop");
 }
 
 export async function rejectOrder(orderId: string, callerId: string): Promise<void> {
   await assertOrderOwner(orderId, callerId);
-  await setOrderStatus(orderId, "shop_rejected", "Rejected by shop");
+  const dbStatus = await requireCurrentStatus(orderId);
+  if (!SELLER_ACTIONABLE_DB_STATUSES.has(dbStatus)) {
+    throw new Error("This order has already been actioned — refresh to see its current status.");
+  }
+  await setOrderStatus(orderId, dbStatus, "shop_rejected", "Rejected by shop");
 }
 
 /**
@@ -546,16 +781,23 @@ export async function rejectOrder(orderId: string, callerId: string): Promise<vo
  * ever being accepted/prepared). Now derived from the order's real DB status,
  * the same "derive, don't trust" fix already applied to orders/tracking-data
  * in Phase 3. See plan/tasks/decisions.md.
+ *
+ * Guards against a real, live-confirmed bug (decisions.md 2026-07-22): `flow`
+ * deliberately excludes "rejected" — the seller-side status every terminal DB
+ * status (shop_rejected/cancelled/refunded/payment_failed) maps to via
+ * `toSellerStatus` — so `flow.indexOf("rejected")` used to return -1 and the
+ * old `+ 1` arithmetic silently computed `flow[0]` == "accepted" instead of
+ * "no next status." A stale seller view (open before a customer's
+ * cancellation) could click "Mark as Preparing" and resurrect the cancelled
+ * order. Terminal and not-yet-accepted statuses now explicitly return before
+ * that arithmetic ever runs, and `setOrderStatus`'s conditional update closes
+ * the remaining race for a status that changes between this read and the
+ * write below.
  */
 export async function advanceOrder(orderId: string, callerId: string): Promise<void> {
   await assertOrderOwner(orderId, callerId);
-  const { data: order, error } = await admin()
-    .from("orders")
-    .select("status")
-    .eq("id", orderId)
-    .single();
-  if (error) throw new Error(`advanceOrder failed: ${error.message}`);
-  const currentStatus = toSellerStatus(order.status);
+  const dbStatus = await requireCurrentStatus(orderId);
+  const currentStatus = toSellerStatus(dbStatus);
 
   const flow: Exclude<SellerOrderStatus, "new" | "rejected">[] = [
     "accepted",
@@ -564,12 +806,10 @@ export async function advanceOrder(orderId: string, callerId: string): Promise<v
     "out_for_delivery",
     "delivered",
   ];
-  const next =
-    currentStatus === "new"
-      ? "accepted"
-      : flow[flow.indexOf(currentStatus as (typeof flow)[number]) + 1];
+  if (currentStatus === "new" || currentStatus === "rejected") return; // nothing to advance
+  const next = flow[flow.indexOf(currentStatus) + 1];
   if (!next) return;
-  await setOrderStatus(orderId, FROM_SELLER_STATUS[next], `Advanced to ${next}`);
+  await setOrderStatus(orderId, dbStatus, FROM_SELLER_STATUS[next], `Advanced to ${next}`);
 }
 
 // ─── Delivery partners (Phase E — real accounts, seller side of assignment) ─
@@ -619,13 +859,34 @@ export async function getAvailablePartners(callerId: string): Promise<AvailableP
   }));
 }
 
-/** Offers this order to a partner (they must accept before it becomes real dispatch). */
+/**
+ * Offers this order to a partner (they must accept before it becomes real
+ * dispatch). Guards a real gap (plan/tasks/decisions.md 2026-07-22): nothing
+ * previously stopped a seller (or a retry) from offering the same order to a
+ * second partner before the first offer was resolved, leaving two live
+ * "offered" rows a partner-data/acceptJob race could both accept. The
+ * authoritative fix is acceptJob's own conditional order-claim — this is a
+ * cheaper first line of defense that avoids creating the redundant row (and
+ * confusing a second partner with a request that can never actually win) in
+ * the common case; it doesn't need to be airtight against the same
+ * millisecond-level race acceptJob already closes.
+ */
 export async function offerToPartner(
   orderId: string,
   callerId: string,
   partnerId: string,
 ): Promise<void> {
   await assertOrderOwner(orderId, callerId);
+  const { data: existing, error: existingErr } = await admin()
+    .from("assignments")
+    .select("id")
+    .eq("order_id", orderId)
+    .in("status", ["offered", "accepted"])
+    .limit(1);
+  if (existingErr) throw new Error(`offerToPartner failed: ${existingErr.message}`);
+  if (existing && existing.length > 0) {
+    throw new Error("This order already has a pending or accepted delivery partner.");
+  }
   const { error } = await admin()
     .from("assignments")
     .insert({ order_id: orderId, partner_id: partnerId, status: "offered" });

@@ -10,6 +10,7 @@ const ProductInputSchema = z.object({
   unit: z.string(),
   category: z.string(),
   inStock: z.boolean(),
+  barcode: z.string().optional(),
 });
 
 // Every function below used to trust a client-supplied ownerId/shopId/
@@ -33,12 +34,39 @@ export const createShop = createServerFn({ method: "POST" })
       businessType: z.string().min(1),
       area: z.string().min(1),
       tagline: z.string().optional(),
+      lat: z.number(),
+      lng: z.number(),
     }),
   )
   .handler(async ({ context, data }) => {
     const be = await import("./backend.server");
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return be.createShop(context.uid, data as any);
+  });
+
+export const searchUnclaimedShops = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .inputValidator(z.object({ query: z.string().min(1) }))
+  .handler(async ({ data }) => {
+    const be = await import("./backend.server");
+    return be.searchUnclaimedShops(data.query);
+  });
+
+export const findPossibleShopMatches = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .inputValidator(z.object({ name: z.string().min(1), lat: z.number(), lng: z.number() }))
+  .handler(async ({ data }) => {
+    const be = await import("./backend.server");
+    return be.findPossibleShopMatches(data.name, data.lat, data.lng);
+  });
+
+export const claimShop = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .inputValidator(z.object({ shopId: z.string().min(1), businessType: z.string().min(1) }))
+  .handler(async ({ context, data }) => {
+    const be = await import("./backend.server");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return be.claimShop(data.shopId, context.uid, data.businessType as any);
   });
 
 // patch is now an explicit allowlisted shape instead of z.record(z.string(),
