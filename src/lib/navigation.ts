@@ -15,6 +15,8 @@ import {
   CreditCard,
   User,
   ShieldCheck,
+  Store,
+  Bike,
 } from "lucide-react";
 import type { ComponentType } from "react";
 import { categories, type Category } from "./data";
@@ -52,6 +54,18 @@ export const MENU_SECTIONS: {
       { id: "wishlist", label: "Wishlist", icon: Heart, path: "/wishlist" },
       { id: "addresses", label: "Saved Addresses", icon: MapPin, path: "/addresses" },
       { id: "payments", label: "Payment Methods", icon: CreditCard, path: "/payments" },
+    ],
+  },
+  {
+    title: "Sell & Deliver",
+    items: [
+      { id: "seller-onboarding", label: "Add Your Shop", icon: Store, path: "/seller" },
+      {
+        id: "partner-onboarding",
+        label: "Become a Delivery Partner",
+        icon: Bike,
+        path: "/partner",
+      },
     ],
   },
   {
