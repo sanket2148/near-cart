@@ -20,6 +20,8 @@ export type Product = {
   stockQty?: number;
   /** Real uploaded product photo; absent means show the emoji instead. */
   imageUrl?: string;
+  /** Scanned barcode (EAN/UPC), if any — unique per shop, not globally. */
+  barcode?: string;
 };
 
 export type Shop = {
@@ -52,6 +54,8 @@ export type Shop = {
   badgeTier?: "none" | "basic" | "verified" | "premium" | "trusted";
   /** Real uploaded shop photo; absent means show the emoji instead. */
   logoUrl?: string;
+  /** False for a shop imported from OpenStreetMap that hasn't been claimed by a real merchant yet. Defaults true for older callers that don't set it. */
+  claimed?: boolean;
 };
 
 export const categories: Category[] = [

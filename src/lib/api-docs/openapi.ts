@@ -435,14 +435,14 @@ export const openApiDocument = {
         operationId: "createShop",
         summary: "Create a new shop for an account",
         description:
-          "Shop starts closed (`isOpen: false`) with hardcoded placeholder coordinates (Bengaluru) and no products. A matching `shop_verifications` row is created at `overall_status: 'incomplete'`.",
+          "Shop starts closed (`isOpen: false`) with the caller's real, client-captured GPS coordinates (rejected server-side if outside a generous Bengaluru bounding box) and no products. A matching `shop_verifications` row is created at `overall_status: 'incomplete'`.",
         requestBody: {
           required: true,
           content: {
             "application/json": {
               schema: {
                 type: "object",
-                required: ["ownerId", "name", "businessType", "area"],
+                required: ["ownerId", "name", "businessType", "area", "lat", "lng"],
                 properties: {
                   ownerId: { type: "string" },
                   name: { type: "string" },
@@ -453,6 +453,14 @@ export const openApiDocument = {
                   },
                   area: { type: "string" },
                   tagline: { type: "string" },
+                  lat: {
+                    type: "number",
+                    description: "Real GPS latitude, pinned by the merchant client-side.",
+                  },
+                  lng: {
+                    type: "number",
+                    description: "Real GPS longitude, pinned by the merchant client-side.",
+                  },
                 },
               },
             },
@@ -461,6 +469,111 @@ export const openApiDocument = {
         responses: {
           "200": {
             description: "The created shop",
+            content: {
+              "application/json": { schema: { $ref: "#/components/schemas/ShopProfile" } },
+            },
+          },
+          "500": errorResponse,
+        },
+      },
+    },
+    "/rpc/seller/searchUnclaimedShops": {
+      get: {
+        tags: ["Seller"],
+        operationId: "searchUnclaimedShops",
+        summary: "Search unclaimed (OSM-imported) shop listings by name",
+        description:
+          'Lets a prospective merchant find "is this my shop?" among shops imported from OpenStreetMap (`claimed: false`) during onboarding — see claimShop.',
+        parameters: [{ name: "query", in: "query", required: true, schema: { type: "string" } }],
+        responses: {
+          "200": {
+            description: "Up to 20 matching unclaimed shops",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      id: { type: "string" },
+                      name: { type: "string" },
+                      addressLine: { type: "string" },
+                      city: { type: "string" },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          "500": errorResponse,
+        },
+      },
+    },
+    "/rpc/seller/findPossibleShopMatches": {
+      get: {
+        tags: ["Seller"],
+        operationId: "findPossibleShopMatches",
+        summary: "Find likely-duplicate unclaimed shops by name + real proximity",
+        description:
+          "Stronger version of searchUnclaimedShops used once a merchant has pinned a real GPS location while creating a new shop (CreateShopStep.tsx): combines pg_trgm name similarity with a PostGIS radius filter (`find_shop_matches` SQL function, migration 0014) instead of a plain substring match, so naming variants of a real nearby OSM-imported listing are still caught.",
+        parameters: [
+          { name: "name", in: "query", required: true, schema: { type: "string" } },
+          { name: "lat", in: "query", required: true, schema: { type: "number" } },
+          { name: "lng", in: "query", required: true, schema: { type: "number" } },
+        ],
+        responses: {
+          "200": {
+            description: "Up to 10 nearby unclaimed shops, ranked by name similarity then distance",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      id: { type: "string" },
+                      name: { type: "string" },
+                      addressLine: { type: "string" },
+                      city: { type: "string" },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          "500": errorResponse,
+        },
+      },
+    },
+    "/rpc/seller/claimShop": {
+      post: {
+        tags: ["Seller"],
+        operationId: "claimShop",
+        summary: "Claim an unclaimed (OSM-imported) shop for the calling account",
+        description:
+          "Atomically fails with a real error if the shop was already claimed by someone else (optimistic-concurrency guard, not a first-write-wins silent overwrite), or if the caller already owns a shop. On success, provisions a `shop_verifications` row exactly like createShop does, and the caller proceeds through the same verification flow.",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["shopId", "businessType"],
+                properties: {
+                  shopId: { type: "string" },
+                  businessType: {
+                    type: "string",
+                    description:
+                      "One of the BusinessType slugs (restaurant, pharmacy, grocery, retail, salon, electronics, bakery, home_business) — confirmed/corrected by the merchant, since OSM's inferred type may be wrong or absent.",
+                  },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          "200": {
+            description: "The now-claimed shop",
             content: {
               "application/json": { schema: { $ref: "#/components/schemas/ShopProfile" } },
             },
@@ -1251,47 +1364,66 @@ export const openApiDocument = {
     // ─── Auth ───────────────────────────────────────────────────────────────
     // ensureRealUser/the dev-mode phone-OTP bridge described here previously
     // was retired 2026-07-18 when the web app moved to real Supabase email-OTP
-    // sessions (src/lib/auth-session/) — see plan/tasks/decisions.md. The
+    // sessions (src/lib/auth-session/) — see plan/tasks/decisions.md. Email
+    // OTP was itself replaced 2026-07-24 by email+password (no custom SMTP is
+    // configured for this project, so OTP codes rode Supabase's default,
+    // heavily rate-limited email provider and could go undelivered). The
     // entries below reflect the real endpoints that replaced it.
-    "/rpc/auth/requestOtp": {
+    "/rpc/auth/signUp": {
       post: {
         tags: ["Auth"],
-        operationId: "requestOtp",
-        summary: "Send a one-time login code to an email address",
+        operationId: "signUp",
+        summary: "Create a new account with email + password and start a real session",
         description:
-          "Real Supabase Auth email OTP (`signInWithOtp`, shouldCreateUser: true) — creates the account on first use. No response body; the client moves straight to the code-entry step.",
+          "Uses the service-role Admin API to create the user with `email_confirm: true` (no confirmation email is sent or required), then signs in immediately to mint a real session. Sets `__Host-nc-at`/`__Host-nc-rt` HttpOnly cookies (access + refresh token) — the tokens never reach client JS.",
         requestBody: {
           required: true,
           content: {
             "application/json": {
               schema: {
                 type: "object",
-                required: ["email"],
-                properties: { email: { type: "string", format: "email" } },
+                required: ["email", "password"],
+                properties: {
+                  email: { type: "string", format: "email" },
+                  password: { type: "string", minLength: 8 },
+                },
               },
             },
           },
         },
-        responses: { "200": { description: "OTP sent" }, "500": errorResponse },
+        responses: {
+          "200": {
+            description: "Signed-up (and signed-in) user",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: { id: { type: "string" }, email: { type: "string" } },
+                },
+              },
+            },
+          },
+          "500": errorResponse,
+        },
       },
     },
-    "/rpc/auth/verifyOtp": {
+    "/rpc/auth/signIn": {
       post: {
         tags: ["Auth"],
-        operationId: "verifyOtp",
-        summary: "Verify an email OTP and start a real session",
+        operationId: "signIn",
+        summary: "Log in with email + password and start a real session",
         description:
-          "Sets `__Host-nc-at`/`__Host-nc-rt` HttpOnly cookies (access + refresh token) — the tokens never reach client JS. Returns only the user's id/email. Every other authenticated server function reads these cookies via `authMiddleware`, never a client-supplied user id (see decisions.md, Phase 1 of the authorization-hardening plan).",
+          "Real Supabase Auth `signInWithPassword`. Sets `__Host-nc-at`/`__Host-nc-rt` HttpOnly cookies (access + refresh token) — the tokens never reach client JS. Returns only the user's id/email. Every other authenticated server function reads these cookies via `authMiddleware`, never a client-supplied user id (see decisions.md, Phase 1 of the authorization-hardening plan).",
         requestBody: {
           required: true,
           content: {
             "application/json": {
               schema: {
                 type: "object",
-                required: ["email", "code"],
+                required: ["email", "password"],
                 properties: {
                   email: { type: "string", format: "email" },
-                  code: { type: "string", minLength: 4, maxLength: 10 },
+                  password: { type: "string" },
                 },
               },
             },

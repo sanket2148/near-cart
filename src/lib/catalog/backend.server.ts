@@ -120,6 +120,8 @@ export type CatalogShop = {
   businessType?: BusinessType;
   badgeTier?: BadgeTier;
   logoUrl?: string;
+  /** False for a shop imported from OpenStreetMap that hasn't been claimed by a real merchant yet — see plan/tasks/decisions.md 2026-07-22. */
+  claimed: boolean;
 };
 
 export type CatalogProduct = {
@@ -139,6 +141,18 @@ export type CatalogProduct = {
 
 const SHOP_SELECT =
   "*, categories(slug), shop_verifications(business_type, current_badge), shop_hours(day_of_week, open_time, close_time)";
+
+// Same shape, but `shop_verifications!inner(...)` — PostgREST only drops a
+// parent row for a filter on an *embedded* column (`.eq("shop_verifications.overall_status", ...)`
+// below) when the embed is an inner join; the plain left-join style embed
+// above just returns a null/empty nested value instead of excluding the row.
+// Used only by customer-facing *listing* surfaces (getNearbyShops's no-
+// location fallback, searchShops) — getShop/getShopProducts deliberately
+// stay ungated so a direct link to an unclaimed/unverified shop still
+// resolves to the real "hasn't started taking orders yet" empty state
+// instead of a 404. See plan/tasks/decisions.md.
+const SHOP_SELECT_VERIFIED_ONLY =
+  "*, categories(slug), shop_verifications!inner(business_type, current_badge, overall_status), shop_hours(day_of_week, open_time, close_time)";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapShopRow(row: any, userLoc?: LatLng): CatalogShop {
@@ -171,6 +185,7 @@ function mapShopRow(row: any, userLoc?: LatLng): CatalogShop {
     businessType: (verification?.business_type as BusinessType | undefined) ?? undefined,
     badgeTier: (verification?.current_badge as BadgeTier | undefined) ?? "none",
     logoUrl: publicImageUrl(row.logo_path),
+    claimed: row.claimed ?? true,
   };
 }
 
@@ -202,13 +217,53 @@ export async function getCategories(): Promise<CatalogCategory[]> {
   return (data ?? []).map((row) => ({ id: row.slug, name: row.name, emoji: row.icon ?? "" }));
 }
 
-export async function getNearbyShops(input: NearbyShopsInput): Promise<CatalogShop[]> {
-  const { data, error } = await admin().from("shops").select(SHOP_SELECT).eq("status", "active");
-  if (error) throw new Error(`getNearbyShops failed: ${error.message}`);
+// How far out "nearby" reaches on the home page — deliberately wider than
+// SERVICE_RADIUS_KM below (browsing what's around is fine even a bit
+// outside actual delivery range; placing an order is the stricter check).
+const NEARBY_RADIUS_M = 15_000;
+// Cap on rows returned even *within* that radius — a dense area could still
+// have more shops than are useful to render in one page; keeps the query
+// bounded regardless of how large the catalog grows.
+const NEARBY_MAX_ROWS = 200;
 
+/**
+ * Real radius-bounded, indexed query (see plan/tasks/decisions.md,
+ * 0012_nearby_shops_postgis.sql) — replaced fetching *every* active shop
+ * and computing distance in JS, which PostgREST's default 1000-row cap
+ * silently truncated once the catalog grew past that. `.rpc(...).select(...)`
+ * is real PostgREST function-embedding: `nearby_shops` returns `setof
+ * public.shops`, so the same SHOP_SELECT join (categories/verification/
+ * hours) still works exactly as it did against a plain table query.
+ */
+export async function getNearbyShops(input: NearbyShopsInput): Promise<CatalogShop[]> {
   const userLoc =
     input.lat != null && input.lng != null ? { lat: input.lat, lng: input.lng } : undefined;
-  let shops = (data ?? []).map((row) => mapShopRow(row, userLoc));
+
+  const { data, error } = userLoc
+    ? await admin()
+        .rpc("nearby_shops", {
+          user_lat: userLoc.lat,
+          user_lng: userLoc.lng,
+          radius_m: NEARBY_RADIUS_M,
+          max_rows: NEARBY_MAX_ROWS,
+        })
+        .select(SHOP_SELECT)
+    : // No location yet (e.g. before the location prompt resolves) — there's
+      // nothing to filter/sort by, so just return a bounded slice rather
+      // than repeating the old "fetch everything" mistake. `nearby_shops`
+      // already bakes the claimed+verified gate into its own WHERE clause;
+      // this fallback needs it applied explicitly.
+      await admin()
+        .from("shops")
+        .select(SHOP_SELECT_VERIFIED_ONLY)
+        .eq("status", "active")
+        .eq("claimed", true)
+        .eq("shop_verifications.overall_status", "approved")
+        .limit(NEARBY_MAX_ROWS);
+  if (error) throw new Error(`getNearbyShops failed: ${error.message}`);
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let shops = ((data ?? []) as any[]).map((row) => mapShopRow(row, userLoc));
   if (input.category) shops = shops.filter((s) => s.category === input.category);
   return shops;
 }
@@ -217,23 +272,30 @@ export async function getNearbyShops(input: NearbyShopsInput): Promise<CatalogSh
 // src/lib/data.ts's mock array — src/lib/location.tsx's serviceability gate
 // used to check a location against that static list, which only happened to
 // agree with the real catalog by coincidence and drifted out of sync as real
-// shops were added with their own real coordinates. This is the real check:
-// same "small catalog, JS haversine, no PostGIS" approach as getNearbyShops
-// above, not a duplicate radius constant — SERVICE_RADIUS_KM lives here now,
-// the one place that actually decides serviceability.
+// shops were added with their own real coordinates. SERVICE_RADIUS_KM lives
+// here now, the one place that actually decides serviceability.
 const SERVICE_RADIUS_KM = 5;
 
 export type ServiceabilityResult = { serviceable: boolean; nearestKm: number | null };
 
+/**
+ * Nearest-shop lookup via the `<->` KNN index operator
+ * (0012_nearby_shops_postgis.sql) instead of fetching every active shop's
+ * lat/lng and taking a JS minimum — the same truncation risk as
+ * getNearbyShops applied here too (and more dangerously: a customer could
+ * have been wrongly told "not serviceable" if the real nearest shop wasn't
+ * among the first ~1000 rows Postgres happened to return).
+ */
 export async function checkServiceability(lat: number, lng: number): Promise<ServiceabilityResult> {
-  const { data, error } = await admin().from("shops").select("lat, lng").eq("status", "active");
+  const { data, error } = await admin().rpc("nearest_shop_distance_m", {
+    user_lat: lat,
+    user_lng: lng,
+  });
   if (error) throw new Error(`checkServiceability failed: ${error.message}`);
-  if (!data || data.length === 0) return { serviceable: false, nearestKm: null };
+  if (data == null) return { serviceable: false, nearestKm: null };
 
-  const nearestKm = Math.min(
-    ...data.map((row) => haversineKm({ lat, lng }, { lat: Number(row.lat), lng: Number(row.lng) })),
-  );
-  return { serviceable: nearestKm <= SERVICE_RADIUS_KM, nearestKm: Number(nearestKm.toFixed(1)) };
+  const nearestKm = Number((data / 1000).toFixed(1));
+  return { serviceable: nearestKm <= SERVICE_RADIUS_KM, nearestKm };
 }
 
 export async function getShop(shopId: string): Promise<CatalogShop | null> {
@@ -252,11 +314,16 @@ export async function getShopProducts(shopId: string): Promise<CatalogProduct[]>
   return (data ?? []).map(mapProductRow);
 }
 
+// A search box is a browse/listing surface too — gated the same as
+// getNearbyShops, otherwise a customer could find an unclaimed/unverified
+// shop by name even though it's excluded from "nearby."
 export async function searchShops(query: string): Promise<CatalogShop[]> {
   const { data, error } = await admin()
     .from("shops")
-    .select(SHOP_SELECT)
+    .select(SHOP_SELECT_VERIFIED_ONLY)
     .eq("status", "active")
+    .eq("claimed", true)
+    .eq("shop_verifications.overall_status", "approved")
     .ilike("name", `%${query}%`);
   if (error) throw new Error(`searchShops failed: ${error.message}`);
   return (data ?? []).map((row) => mapShopRow(row));

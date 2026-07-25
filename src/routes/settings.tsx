@@ -14,7 +14,7 @@ import {
   HelpCircle,
 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
-import { EmailOtpAuth } from "@/components/EmailOtpAuth";
+import { EmailPasswordAuth } from "@/components/EmailPasswordAuth";
 import { useAuth } from "@/lib/auth";
 import { getProfile, updateProfile } from "@/lib/profile/api.functions";
 import { Button } from "@/components/ui/button";
@@ -86,7 +86,7 @@ function SettingsPage() {
         <h1 className="text-xl font-extrabold">Settings</h1>
         <p className="mt-1 text-sm text-muted-foreground">Log in to manage your account.</p>
         <div className="mt-4">
-          <EmailOtpAuth onSuccess={() => toast.success("Logged in!")} />
+          <EmailPasswordAuth onSuccess={() => toast.success("Logged in!")} />
         </div>
       </AppShell>
     );

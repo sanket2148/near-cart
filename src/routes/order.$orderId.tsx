@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Phone, Loader2, Star, Play, Square } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
-import { EmailOtpAuth } from "@/components/EmailOtpAuth";
+import { EmailPasswordAuth } from "@/components/EmailPasswordAuth";
 import { ReviewForm } from "@/components/ReviewForm";
 import { useAuth } from "@/lib/auth";
 import { useCart } from "@/lib/cart";
@@ -221,7 +221,7 @@ function OrderPage() {
         <h1 className="text-xl font-extrabold">Track order</h1>
         <p className="mt-1 text-sm text-muted-foreground">Log in to view this order.</p>
         <div className="mt-4">
-          <EmailOtpAuth onSuccess={() => toast.success("Logged in!")} />
+          <EmailPasswordAuth onSuccess={() => toast.success("Logged in!")} />
         </div>
       </AppShell>
     );

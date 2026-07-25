@@ -185,6 +185,23 @@ function ShopPage() {
               ))
             )}
           </div>
+        ) : categoriesInShop.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center">
+            {shop.claimed === false ? (
+              <>
+                <p className="text-sm font-semibold">
+                  This shop was added from public listings and hasn't started taking orders yet.
+                </p>
+                <Link to="/seller" className="mt-2 inline-block text-sm font-semibold text-primary">
+                  Is this your shop? Claim it →
+                </Link>
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                This shop hasn't added any products yet. Check back soon!
+              </p>
+            )}
+          </div>
         ) : (
           categoriesInShop.map((c) => (
             <section key={c} id={`cat-${c}`} className="scroll-mt-20">

@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { Loader2, ShieldAlert } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { checkAdminAccess } from "@/lib/admin-data/api.functions";
-import { EmailOtpAuth } from "@/components/EmailOtpAuth";
+import { EmailPasswordAuth } from "@/components/EmailPasswordAuth";
 import { AdminShell } from "@/components/admin/AdminShell";
 
 export const Route = createFileRoute("/admin")({
@@ -43,7 +43,7 @@ function AdminLayout() {
           <p className="mb-4 text-center text-sm text-muted-foreground">
             Log in to access the admin console.
           </p>
-          <EmailOtpAuth onSuccess={() => toast.success("Logged in!")} />
+          <EmailPasswordAuth onSuccess={() => toast.success("Logged in!")} />
         </div>
       </div>
     );

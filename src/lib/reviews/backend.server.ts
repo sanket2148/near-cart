@@ -39,11 +39,18 @@ export async function getReviewableOrder(
 ): Promise<ReviewableOrder | null> {
   const { data: order, error } = await admin()
     .from("orders")
-    .select("id, customer_id, shop_id, status, shops(name)")
+    .select("id, customer_id, shop_id, status, shops(name, owner_id)")
     .eq("id", orderId)
     .maybeSingle();
   if (error) throw new Error(`getReviewableOrder failed: ${error.message}`);
   if (!order || order.customer_id !== callerId || order.status !== "delivered") return null;
+
+  const shop = Array.isArray(order.shops) ? order.shops[0] : order.shops;
+  // Defense in depth alongside orders/backend.server.ts's placeOrder guard
+  // (2026-07-22, see plan/tasks/decisions.md) — a shop owner reviewing their
+  // own order is exactly the abuse case that guard exists to prevent, so
+  // block it here too even if some other path ever let a self-order through.
+  if (shop?.owner_id === callerId) return null;
 
   const { data: assignment } = await admin()
     .from("assignments")
@@ -52,7 +59,6 @@ export async function getReviewableOrder(
     .eq("status", "completed")
     .maybeSingle();
 
-  const shop = Array.isArray(order.shops) ? order.shops[0] : order.shops;
   return {
     shopId: order.shop_id,
     shopName: shop?.name ?? "Shop",

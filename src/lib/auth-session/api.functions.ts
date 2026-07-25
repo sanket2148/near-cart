@@ -1,19 +1,24 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
-export const requestOtp = createServerFn({ method: "POST" })
-  .inputValidator(z.object({ email: z.string().email() }))
-  .handler(async ({ data }) => {
-    const be = await import("./backend.server");
-    await be.requestOtp(data.email);
-  });
+const PASSWORD_SCHEMA = z.string().min(8, "Password must be at least 8 characters.");
 
-export const verifyOtp = createServerFn({ method: "POST" })
-  .inputValidator(z.object({ email: z.string().email(), code: z.string().min(4).max(10) }))
+export const signIn = createServerFn({ method: "POST" })
+  .inputValidator(z.object({ email: z.string().email(), password: z.string().min(1) }))
   .handler(async ({ data }) => {
     const be = await import("./backend.server");
     const cookies = await import("./cookies.server");
-    const result = await be.verifyOtp(data.email, data.code);
+    const result = await be.signInWithPassword(data.email, data.password);
+    cookies.setSessionCookies(result.session);
+    return { id: result.userId, email: result.email };
+  });
+
+export const signUp = createServerFn({ method: "POST" })
+  .inputValidator(z.object({ email: z.string().email(), password: PASSWORD_SCHEMA }))
+  .handler(async ({ data }) => {
+    const be = await import("./backend.server");
+    const cookies = await import("./cookies.server");
+    const result = await be.signUpWithPassword(data.email, data.password);
     cookies.setSessionCookies(result.session);
     return { id: result.userId, email: result.email };
   });

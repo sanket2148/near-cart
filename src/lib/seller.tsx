@@ -23,6 +23,9 @@ import { useAuth } from "./auth";
 import {
   getMyShop as getMyShopFn,
   createShop as createShopFn,
+  searchUnclaimedShops as searchUnclaimedShopsFn,
+  findPossibleShopMatches as findPossibleShopMatchesFn,
+  claimShop as claimShopFn,
   updateShop as updateShopFn,
   syncVerificationSummary,
   getMyProducts as getMyProductsFn,
@@ -92,6 +95,8 @@ export type NewShopInput = {
   businessType: BusinessType;
   area: string;
   tagline?: string;
+  lat: number;
+  lng: number;
 };
 
 /** Whether this account has already created a real shop. */
@@ -108,8 +113,33 @@ export async function createShop(input: NewShopInput): Promise<ShopProfile> {
       businessType: input.businessType,
       area: input.area,
       tagline: input.tagline,
+      lat: input.lat,
+      lng: input.lng,
     },
   }) as unknown as Promise<ShopProfile>;
+}
+
+export type UnclaimedShop = { id: string; name: string; addressLine: string; city: string };
+
+/** Search unclaimed (OpenStreetMap-imported) shop listings by name, for the "is this your shop?" claim flow. */
+export async function searchUnclaimedShops(query: string): Promise<UnclaimedShop[]> {
+  return searchUnclaimedShopsFn({ data: { query } }) as unknown as Promise<UnclaimedShop[]>;
+}
+
+/** Real name+proximity duplicate check for the "create a new shop" flow — see seller-data/backend.server.ts. */
+export async function findPossibleShopMatches(
+  name: string,
+  lat: number,
+  lng: number,
+): Promise<UnclaimedShop[]> {
+  return findPossibleShopMatchesFn({ data: { name, lat, lng } }) as unknown as Promise<
+    UnclaimedShop[]
+  >;
+}
+
+/** Claim an unclaimed shop for this account — throws if it was already claimed by someone else. */
+export async function claimShop(shopId: string, businessType: BusinessType): Promise<ShopProfile> {
+  return claimShopFn({ data: { shopId, businessType } }) as unknown as Promise<ShopProfile>;
 }
 
 const MIN = 60 * 1000;
@@ -158,8 +188,8 @@ type SellerContextValue = {
   verification: ShopVerification;
   updateVerification: (v: ShopVerification) => void;
   updateShop: (patch: Partial<ShopProfile>) => void;
-  addProduct: (p: Omit<Product, "id" | "shopId">) => void;
-  updateProduct: (id: string, patch: Partial<Product>) => void;
+  addProduct: (p: Omit<Product, "id" | "shopId">) => Promise<void>;
+  updateProduct: (id: string, patch: Partial<Product>) => Promise<void>;
   removeProduct: (id: string) => void;
   toggleStock: (id: string) => void;
   acceptOrder: (id: string) => void;
@@ -273,11 +303,13 @@ export function SellerProvider({ children }: { children: ReactNode }) {
       updateShop: (patch) => {
         void updateShopFn({ data: { shopId: shop.id, patch } }).then(invalidateShop);
       },
-      addProduct: (p) => {
-        void addProductFn({ data: { shopId: shop.id, input: p } }).then(invalidateProducts);
+      addProduct: async (p) => {
+        await addProductFn({ data: { shopId: shop.id, input: p } });
+        await invalidateProducts();
       },
-      updateProduct: (id, patch) => {
-        void updateProductFn({ data: { productId: id, patch } }).then(invalidateProducts);
+      updateProduct: async (id, patch) => {
+        await updateProductFn({ data: { productId: id, patch } });
+        await invalidateProducts();
       },
       removeProduct: (id) => {
         void removeProductFn({ data: { productId: id } }).then(invalidateProducts);

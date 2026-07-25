@@ -35,6 +35,11 @@ export const placeOrder = createServerFn({ method: "POST" })
       lat: z.number(),
       lng: z.number(),
       couponCode: z.string().min(1).optional(),
+      // Client-generated once per checkout attempt and reused across
+      // retries (network retry, refresh-and-resubmit, a double-click that
+      // both fire) — see backend.server.ts's placeOrder for how this makes
+      // a retry return the already-created order instead of a duplicate.
+      idempotencyKey: z.string().min(8).max(200),
     }),
   )
   .handler(async ({ context, data }) => {

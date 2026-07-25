@@ -68,6 +68,122 @@ test("a shop with real configured hours shows a real computed label, not just Op
   }
 });
 
+test("an unclaimed OSM-imported shop shows a claim CTA, not a blank product grid", async ({
+  page,
+}) => {
+  const admin = adminClient();
+  const { data: cat } = await admin.from("categories").select("id").limit(1).maybeSingle();
+  const { data: shop, error } = await admin
+    .from("shops")
+    .insert({
+      name: "E2E Unclaimed Empty-State Shop",
+      category_id: cat?.id,
+      status: "active",
+      is_open: false,
+      claimed: false,
+      owner_id: null,
+      source: "osm",
+      external_id: `osm:node/e2e-emptystate-${Date.now()}`,
+      lat: 12.9716,
+      lng: 77.5946,
+      address_line: "Test Area",
+      city: "Bengaluru",
+      pincode: "560001",
+    })
+    .select("id")
+    .single();
+  if (error) throw new Error(error.message);
+
+  // getNearbyShops is now a real radius/count-bounded query
+  // (0012_nearby_shops_postgis.sql) instead of "fetch every active shop" —
+  // correct, but it means the home page's "nearby" list is no longer
+  // guaranteed to include an arbitrary freshly-seeded shop unless the
+  // browser actually has a location near it. Seed a real resolved location
+  // at this exact shop's coordinates so it's unambiguously "nearby."
+  await page.context().addInitScript(
+    ([lat, lng]) => {
+      localStorage.setItem(
+        "nearcart-location",
+        JSON.stringify({
+          status: "serviceable",
+          coords: { lat, lng },
+          label: "Test Area",
+          dismissedAt: null,
+        }),
+      );
+    },
+    [12.9716, 77.5946],
+  );
+
+  try {
+    await page.goto(`/shop/${shop.id}`);
+    await expect(
+      page.getByText(
+        "This shop was added from public listings and hasn't started taking orders yet.",
+      ),
+    ).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText("Is this your shop? Claim it →")).toBeVisible();
+
+    // The customer-facing browse gate (0013_verified_shop_gate.sql) means an
+    // unclaimed shop never appears in "nearby" results, even at its own
+    // exact coordinates — direct link still works (above), browsing to it
+    // no longer does. This used to assert the opposite (a "Not yet taking
+    // orders" card) back when unclaimed shops were still browsable; that
+    // behavior is gone by design now, not a regression.
+    await page.goto("/");
+    await expect(page.getByText("Shops near you", { exact: true })).toBeVisible({ timeout: 10000 });
+    await expect(
+      page.getByRole("link", { name: /E2E Unclaimed Empty-State Shop/ }),
+    ).not.toBeVisible();
+  } finally {
+    await admin.from("shops").delete().eq("id", shop.id);
+  }
+});
+
+test("a claimed shop with no products yet shows a neutral empty state, no claim CTA", async ({
+  page,
+}) => {
+  const admin = adminClient();
+  const { data: sellerUser } = await admin.auth.admin.createUser({
+    email: `test-e2e-claimed-empty-${Date.now()}@example.com`,
+    password: "Test1234!",
+    email_confirm: true,
+  });
+  const { data: cat } = await admin.from("categories").select("id").limit(1).maybeSingle();
+  const { data: shop, error } = await admin
+    .from("shops")
+    .insert({
+      owner_id: sellerUser.user.id,
+      name: "E2E Claimed Empty-State Shop",
+      category_id: cat?.id,
+      status: "active",
+      is_open: false,
+      lat: 12.9716,
+      lng: 77.5946,
+      address_line: "Test Area",
+      city: "Bengaluru",
+      pincode: "560001",
+    })
+    .select("id")
+    .single();
+  if (error) throw new Error(error.message);
+
+  try {
+    await page.goto(`/shop/${shop.id}`);
+    await page
+      .getByText("Maybe later — just let me browse")
+      .click({ timeout: 5000 })
+      .catch(() => {});
+    await expect(
+      page.getByText("This shop hasn't added any products yet. Check back soon!"),
+    ).toBeVisible({ timeout: 10000 });
+    await expect(page.getByText("Is this your shop? Claim it →")).not.toBeVisible();
+  } finally {
+    await admin.from("shops").delete().eq("id", shop.id);
+    await admin.auth.admin.deleteUser(sellerUser.user.id).catch(() => {});
+  }
+});
+
 test("/api-docs loads and serves the expanded OpenAPI spec", async ({ page, request, baseURL }) => {
   await page.goto("/api-docs");
   await expect(page).toHaveTitle(/api|docs|swagger/i);

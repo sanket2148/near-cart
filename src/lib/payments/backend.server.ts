@@ -28,6 +28,7 @@
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { createHmac, timingSafeEqual } from "node:crypto";
+import { insertNotification } from "@/lib/notifications/backend.server";
 
 let _admin: SupabaseClient | null = null;
 
@@ -96,6 +97,51 @@ function verifySignature(payload: string, signature: string, secret: string): bo
   return timingSafeEqual(a, b);
 }
 
+/**
+ * The write-through `payment_failed` never had (see plan/tasks/decisions.md
+ * 2026-07-22): `toUiStatus`/`toSellerStatus` (orders/backend.server.ts,
+ * seller-data/backend.server.ts) and admin's revenue filters already treat
+ * `payment_failed` as a real, reachable order status, but nothing ever wrote
+ * it — a failed payment left the order stuck at `created` forever, invisible
+ * to customer/seller/admin as "failed" rather than just "not yet paid."
+ *
+ * Conditioned on the order still being `created` — the only status an order
+ * sits in while awaiting payment verification (orders/backend.server.ts's
+ * placeOrder). This is what stops a late/out-of-order webhook (Razorpay
+ * explicitly does not guarantee delivery order) from clobbering an order
+ * that a different, successful verification already flipped to `paid` in
+ * the meantime — if the row's no longer `created`, this is a no-op.
+ */
+async function markOrderPaymentFailed(
+  orderId: string,
+  customerId: string | null | undefined,
+  note: string,
+): Promise<void> {
+  const { data: updated, error } = await admin()
+    .from("orders")
+    .update({ status: "payment_failed" })
+    .eq("id", orderId)
+    .eq("status", "created")
+    .select("id")
+    .maybeSingle();
+  if (error) throw new Error(`markOrderPaymentFailed: order update failed: ${error.message}`);
+  if (!updated) return; // already resolved (paid, or already marked failed) since we last checked
+
+  await admin()
+    .from("order_events")
+    .insert({ order_id: orderId, to_status: "payment_failed", note });
+
+  if (customerId) {
+    await insertNotification(
+      customerId,
+      "order_status",
+      "Payment failed",
+      "We couldn't confirm your payment. No amount was charged — please try placing the order again.",
+      { orderId, status: "payment_failed" },
+    );
+  }
+}
+
 export type VerifyPaymentInput = {
   orderId: string;
   razorpayOrderId: string;
@@ -137,7 +183,14 @@ export async function verifyPayment(input: VerifyPaymentInput): Promise<void> {
     .eq("gateway_ref", input.razorpayOrderId);
   if (payErr) throw new Error(`verifyPayment: payments update failed: ${payErr.message}`);
 
-  if (!ok) throw new Error("Payment signature verification failed.");
+  if (!ok) {
+    await markOrderPaymentFailed(
+      input.orderId,
+      order.customer_id,
+      "Payment signature verification failed",
+    );
+    throw new Error("Payment signature verification failed.");
+  }
 
   const { error: orderErr } = await admin().from("orders").update({ status: "paid" }).eq("id", input.orderId);
   if (orderErr) throw new Error(`verifyPayment: order update failed: ${orderErr.message}`);
@@ -168,10 +221,12 @@ export async function handleWebhookEvent(payload: RazorpayWebhookPayload): Promi
 
   const { data: row } = await admin()
     .from("payments")
-    .select("order_id, status")
+    .select("order_id, status, orders(customer_id)")
     .eq("gateway_ref", payment.order_id)
     .maybeSingle();
   if (!row) return; // unknown gateway order — ignore rather than throw (webhook must still 200)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const customerId = (row.orders as any)?.customer_id as string | undefined;
 
   if (payload.event === "payment.captured") {
     if (row.status === "captured") return;
@@ -186,5 +241,6 @@ export async function handleWebhookEvent(payload: RazorpayWebhookPayload): Promi
   } else if (payload.event === "payment.failed") {
     if (row.status === "failed") return;
     await admin().from("payments").update({ status: "failed" }).eq("gateway_ref", payment.order_id);
+    await markOrderPaymentFailed(row.order_id, customerId, "Payment failed (Razorpay webhook)");
   }
 }

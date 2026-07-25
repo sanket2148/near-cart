@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Loader2, Bell, CheckCheck } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
-import { EmailOtpAuth } from "@/components/EmailOtpAuth";
+import { EmailPasswordAuth } from "@/components/EmailPasswordAuth";
 import { useAuth } from "@/lib/auth";
 import {
   listNotifications,
@@ -81,7 +81,7 @@ function NotificationsPage() {
           Log in to see updates about your orders.
         </p>
         <div className="mt-4">
-          <EmailOtpAuth onSuccess={() => toast.success("Logged in!")} />
+          <EmailPasswordAuth onSuccess={() => toast.success("Logged in!")} />
         </div>
       </AppShell>
     );

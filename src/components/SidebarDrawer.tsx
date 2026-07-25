@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef } from "react";
 import { Link, useRouter, useLocation } from "@tanstack/react-router";
-import { Pin, PinOff, PanelLeftClose, PanelLeft, History, Star, LogOut } from "lucide-react";
+import { Pin, PinOff, PanelLeftClose, PanelLeft, History, Star, LogOut, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
-import { VerificationBadge } from "@/components/VerificationBadge";
 import { MENU_SECTIONS, type NavigationItem } from "@/lib/navigation";
+import { useAuth } from "@/lib/auth";
 
 // --- Types & Storage Keys ---
 const STORAGE_KEYS = {
@@ -96,6 +96,12 @@ function SidebarContent({
   const router = useRouter();
   const location = useLocation();
   const currentPath = location.pathname;
+  const { user, logout } = useAuth();
+
+  async function handleLogout() {
+    await logout();
+    window.location.href = "/";
+  }
 
   const [pinnedIds, setPinnedIds] = useState<string[]>([]);
   const [recentPaths, setRecentPaths] = useState<{ label: string; path: string }[]>([]);
@@ -192,7 +198,11 @@ function SidebarContent({
       className={cn("flex flex-col gap-5 px-3 h-full", collapsed && "items-center px-1")}
     >
       <TooltipProvider>
-        {/* User profile section */}
+        {/* User profile section — reflects real auth state (useAuth()), not
+            the hardcoded "Sanket Kumar / sanket@nearcart.com" placeholder
+            this used to always show regardless of whether anyone was
+            actually logged in, which is what made this sidebar contradict
+            pages like checkout.tsx that check the real session. */}
         <div
           className={cn(
             "flex items-center gap-3 rounded-2xl bg-muted/40 border border-border/40 p-3 transition-all",
@@ -202,24 +212,19 @@ function SidebarContent({
           )}
         >
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-hero text-lg font-bold shadow-sm">
-            🧑‍💻
+            {user ? "🧑‍💻" : <User className="h-4.5 w-4.5" />}
           </div>
           {!collapsed && (
             <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-1">
+              {user ? (
                 <span className="block truncate text-xs font-bold leading-none text-foreground">
-                  Sanket Kumar
+                  {user.email}
                 </span>
-                <VerificationBadge
-                  tier="trusted"
-                  size="sm"
-                  showLabel={false}
-                  className="h-3.5 w-3.5 shrink-0"
-                />
-              </div>
-              <span className="block truncate text-[10px] text-muted-foreground mt-0.5">
-                sanket@nearcart.com
-              </span>
+              ) : (
+                <span className="block truncate text-xs font-bold leading-none text-muted-foreground">
+                  Not logged in
+                </span>
+              )}
             </div>
           )}
         </div>
@@ -292,33 +297,54 @@ function SidebarContent({
           ))}
         </div>
 
-        {/* Logout button at bottom */}
+        {/* Log out (real session) if logged in; otherwise a "Log in" link —
+            never both claim "Log Out" and require login on the next page,
+            which is the exact contradiction this fixes. */}
         <div className="w-full border-t border-border/55 pt-3 mb-2 flex justify-center">
-          {collapsed ? (
+          {user ? (
+            collapsed ? (
+              <Tooltip delayDuration={100}>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={handleLogout}
+                    className="flex h-9 w-9 items-center justify-center rounded-xl text-destructive hover:bg-destructive/10 transition-colors"
+                  >
+                    <LogOut className="h-4.5 w-4.5" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="right">Log Out</TooltipContent>
+              </Tooltip>
+            ) : (
+              <Button
+                variant="ghost"
+                onClick={handleLogout}
+                className="w-full text-xs font-bold text-destructive hover:bg-destructive/10 justify-start h-8 px-2.5 rounded-xl gap-2"
+              >
+                <LogOut className="h-4 w-4" /> Log Out
+              </Button>
+            )
+          ) : collapsed ? (
             <Tooltip delayDuration={100}>
               <TooltipTrigger asChild>
-                <button
-                  onClick={() => {
-                    localStorage.clear();
-                    window.location.href = "/";
-                  }}
-                  className="flex h-9 w-9 items-center justify-center rounded-xl text-destructive hover:bg-destructive/10 transition-colors"
+                <Link
+                  to="/settings"
+                  onClick={onClose}
+                  className="flex h-9 w-9 items-center justify-center rounded-xl text-primary hover:bg-primary/10 transition-colors"
                 >
-                  <LogOut className="h-4.5 w-4.5" />
-                </button>
+                  <User className="h-4.5 w-4.5" />
+                </Link>
               </TooltipTrigger>
-              <TooltipContent side="right">Log Out</TooltipContent>
+              <TooltipContent side="right">Log In</TooltipContent>
             </Tooltip>
           ) : (
             <Button
               variant="ghost"
-              onClick={() => {
-                localStorage.clear();
-                window.location.href = "/";
-              }}
-              className="w-full text-xs font-bold text-destructive hover:bg-destructive/10 justify-start h-8 px-2.5 rounded-xl gap-2"
+              asChild
+              className="w-full text-xs font-bold text-primary hover:bg-primary/10 justify-start h-8 px-2.5 rounded-xl gap-2"
             >
-              <LogOut className="h-4 w-4" /> Log Out
+              <Link to="/settings" onClick={onClose}>
+                <User className="h-4 w-4" /> Log In
+              </Link>
             </Button>
           )}
         </div>

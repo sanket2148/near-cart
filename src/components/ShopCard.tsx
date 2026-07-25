@@ -67,18 +67,28 @@ export function ShopCard({ shop }: { shop: Shop }) {
             <span className="flex items-center gap-1">
               <Bike className="h-3.5 w-3.5" /> {shop.distanceKm} km · {shop.area}
             </span>
-            <span
-              className={cn("font-semibold", shop.isOpen ? "text-primary" : "text-destructive")}
-            >
-              {shop.openLabel ?? (shop.isOpen ? "Open" : "Closed")}
-            </span>
+            {shop.claimed === false ? (
+              <span className="font-semibold text-muted-foreground">Not yet taking orders</span>
+            ) : (
+              <span
+                className={cn("font-semibold", shop.isOpen ? "text-primary" : "text-destructive")}
+              >
+                {shop.openLabel ?? (shop.isOpen ? "Open" : "Closed")}
+              </span>
+            )}
           </div>
         </div>
       </div>
-      <div className="flex items-center justify-between border-t border-dashed border-border px-3 py-2 text-xs">
-        <span className="text-muted-foreground">Delivery {formatINR(shop.deliveryFee)}</span>
-        <span className="font-semibold text-primary">Free above {formatINR(shop.freeAbove)}</span>
-      </div>
+      {shop.claimed === false ? (
+        <div className="border-t border-dashed border-border px-3 py-2 text-center text-xs text-muted-foreground">
+          Listed from public sources — not open for online orders yet
+        </div>
+      ) : (
+        <div className="flex items-center justify-between border-t border-dashed border-border px-3 py-2 text-xs">
+          <span className="text-muted-foreground">Delivery {formatINR(shop.deliveryFee)}</span>
+          <span className="font-semibold text-primary">Free above {formatINR(shop.freeAbove)}</span>
+        </div>
+      )}
     </Link>
   );
 }

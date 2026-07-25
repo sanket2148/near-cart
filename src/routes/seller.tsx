@@ -1,11 +1,14 @@
 import { createFileRoute, Outlet } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+import { Loader2, Search, Store } from "lucide-react";
 import { SellerProvider, hasShop } from "@/lib/seller";
 import { SellerShell } from "@/components/seller/SellerShell";
-import { EmailOtpAuth } from "@/components/EmailOtpAuth";
+import { EmailPasswordAuth } from "@/components/EmailPasswordAuth";
 import { CreateShopStep } from "@/components/seller/CreateShopStep";
+import { ClaimShopStep } from "@/components/seller/ClaimShopStep";
+import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth";
 
 export const Route = createFileRoute("/seller")({
@@ -25,6 +28,7 @@ export const Route = createFileRoute("/seller")({
 function SellerLayout() {
   const { user, loading: authLoading } = useAuth();
   const queryClient = useQueryClient();
+  const [mode, setMode] = useState<"choose" | "claim" | "create">("choose");
   const { data: shopReady, isLoading } = useQuery({
     queryKey: ["has-shop", user?.id],
     queryFn: () => hasShop(),
@@ -47,7 +51,7 @@ function SellerLayout() {
           <p className="mb-4 text-center text-sm text-muted-foreground">
             Log in to manage your shop on NearCart.
           </p>
-          <EmailOtpAuth onSuccess={() => toast.success("Logged in!")} />
+          <EmailPasswordAuth onSuccess={() => toast.success("Logged in!")} />
         </div>
       </div>
     );
@@ -62,13 +66,42 @@ function SellerLayout() {
   }
 
   if (!shopReady) {
+    const onShopReady = (successMessage: string) => {
+      toast.success(successMessage);
+      queryClient.invalidateQueries({ queryKey: ["has-shop", user.id] });
+    };
+
+    if (mode === "create") {
+      return (
+        <CreateShopStep
+          onCreated={() => onShopReady("Shop created! Let's get it verified.")}
+          onSwitchToClaim={() => setMode("claim")}
+        />
+      );
+    }
+    if (mode === "claim") {
+      return (
+        <ClaimShopStep
+          onClaimed={() => onShopReady("Shop claimed! Let's get it verified.")}
+          onSwitchToCreate={() => setMode("create")}
+        />
+      );
+    }
     return (
-      <CreateShopStep
-        onCreated={() => {
-          toast.success("Shop created! Let's get it verified.");
-          queryClient.invalidateQueries({ queryKey: ["has-shop", user.id] });
-        }}
-      />
+      <div className="flex min-h-screen items-center justify-center bg-background px-4">
+        <div className="w-full max-w-sm space-y-4 text-center">
+          <h1 className="text-xl font-extrabold">Is your shop already listed on NearCart?</h1>
+          <p className="text-sm text-muted-foreground">
+            We list real nearby shops automatically — yours might already be here.
+          </p>
+          <Button variant="hero" size="xl" className="w-full" onClick={() => setMode("claim")}>
+            <Search className="h-4 w-4" /> Find and claim my shop
+          </Button>
+          <Button variant="outline" size="xl" className="w-full" onClick={() => setMode("create")}>
+            <Store className="h-4 w-4" /> Create a new shop
+          </Button>
+        </div>
+      </div>
     );
   }
 

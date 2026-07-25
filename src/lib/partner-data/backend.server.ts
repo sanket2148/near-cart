@@ -229,22 +229,68 @@ export async function getMyJobs(callerId: string): Promise<DeliveryJob[]> {
   return (data ?? []).map(mapJobRow);
 }
 
+// Order statuses at which a partner is legitimately still waiting to be
+// assigned (see seller.orders.tsx's `needsPartner` — offering only happens
+// while an order is "preparing" or "ready_for_pickup"). Anything else means
+// this order has already moved past the point of accepting an assignment.
+const PRE_ASSIGNMENT_ORDER_STATUSES = ["preparing", "ready_for_pickup"];
+
+/**
+ * Two different partners can each hold their own "offered" assignment row
+ * for the same order (a seller re-offering before the first is resolved, or
+ * a retry) — nothing about assertAssignmentOwner or a plain update stops
+ * both from independently calling acceptJob and both succeeding, since
+ * they're different rows. This is a real, previously-unguarded race (see
+ * plan/tasks/decisions.md 2026-07-22) — fixed with two conditional updates:
+ * first claim THIS assignment (only if it's still "offered" — guards a
+ * double-click/retry on the same row), then claim the ORDER itself (only if
+ * it hasn't already been claimed by a rival assignment). Whichever call's
+ * order-claim lands first wins; the loser's assignment is reverted to
+ * "expired" (a real, already-defined `assignment_status` value, previously
+ * unused in code) rather than left dangling as "accepted" on a job the
+ * order no longer reflects.
+ */
 export async function acceptJob(assignmentId: string, callerId: string): Promise<void> {
   await assertAssignmentOwner(assignmentId, callerId);
   const { data: assignment, error: findErr } = await admin()
     .from("assignments")
-    .select("order_id")
+    .select("order_id, orders(status)")
     .eq("id", assignmentId)
     .single();
   if (findErr) throw new Error(`acceptJob lookup failed: ${findErr.message}`);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const orderStatus = (assignment.orders as any)?.status;
+  if (!PRE_ASSIGNMENT_ORDER_STATUSES.includes(orderStatus)) {
+    throw new Error("This order is no longer waiting for a delivery partner.");
+  }
 
-  const { error } = await admin()
+  const { data: claimedAssignment, error: claimErr } = await admin()
     .from("assignments")
     .update({ status: "accepted", responded_at: new Date().toISOString() })
-    .eq("id", assignmentId);
-  if (error) throw new Error(`acceptJob failed: ${error.message}`);
+    .eq("id", assignmentId)
+    .eq("status", "offered")
+    .select("id")
+    .maybeSingle();
+  if (claimErr) throw new Error(`acceptJob failed: ${claimErr.message}`);
+  if (!claimedAssignment) {
+    throw new Error("This delivery request is no longer available.");
+  }
 
-  await admin().from("orders").update({ status: "partner_assigned" }).eq("id", assignment.order_id);
+  const { data: claimedOrder, error: orderErr } = await admin()
+    .from("orders")
+    .update({ status: "partner_assigned" })
+    .eq("id", assignment.order_id)
+    .in("status", PRE_ASSIGNMENT_ORDER_STATUSES)
+    .select("id")
+    .maybeSingle();
+  if (orderErr) throw new Error(`acceptJob failed: ${orderErr.message}`);
+  if (!claimedOrder) {
+    // Lost the race to another partner's assignment — release this one
+    // instead of leaving it stuck "accepted" on an order assigned elsewhere.
+    await admin().from("assignments").update({ status: "expired" }).eq("id", assignmentId);
+    throw new Error("This delivery was already accepted by another partner.");
+  }
+
   await admin().from("order_events").insert({
     order_id: assignment.order_id,
     to_status: "partner_assigned",

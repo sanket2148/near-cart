@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, MapPin, Wallet, Check, Clock, Zap, Loader2, Tag, X } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
-import { EmailOtpAuth } from "@/components/EmailOtpAuth";
+import { EmailPasswordAuth } from "@/components/EmailPasswordAuth";
 import { LocationModal } from "@/components/LocationModal";
 import { useCart } from "@/lib/cart";
 import { useAuth } from "@/lib/auth";
@@ -28,6 +28,26 @@ const payments = [
   { id: "card", label: "Card", hint: "Credit / Debit" },
   { id: "cod", label: "Cash on Delivery", hint: "Pay at your door" },
 ] as const;
+
+// Backs orders/backend.server.ts's placeOrder idempotency guard (see
+// plan/tasks/decisions.md 2026-07-22) — sessionStorage, not component state,
+// specifically so the SAME key survives a page refresh mid-request, not just
+// a double-click. Cleared only once an order is confirmed placed, so a
+// retried attempt (refresh, network blip, a second tab) reuses it and the
+// server returns the already-created order instead of a duplicate.
+const IDEMPOTENCY_STORAGE_KEY = "nearcart-checkout-idempotency";
+
+function getOrCreateIdempotencyKey(): string {
+  const existing = sessionStorage.getItem(IDEMPOTENCY_STORAGE_KEY);
+  if (existing) return existing;
+  const key = crypto.randomUUID();
+  sessionStorage.setItem(IDEMPOTENCY_STORAGE_KEY, key);
+  return key;
+}
+
+function clearIdempotencyKey(): void {
+  sessionStorage.removeItem(IDEMPOTENCY_STORAGE_KEY);
+}
 
 function CheckoutPage() {
   const navigate = useNavigate();
@@ -108,7 +128,7 @@ function CheckoutPage() {
           order. Your cart stays exactly as it is.
         </p>
         <div className="mt-4">
-          <EmailOtpAuth
+          <EmailPasswordAuth
             title="Log in to continue"
             subtitle="We'll only use this to send order updates."
             onSuccess={() => toast.success("Logged in!")}
@@ -163,6 +183,7 @@ function CheckoutPage() {
           lat: locationState.coords?.lat ?? shop.lat,
           lng: locationState.coords?.lng ?? shop.lng,
           couponCode: appliedCoupon?.code,
+          idempotencyKey: getOrCreateIdempotencyKey(),
         },
       });
 
@@ -184,6 +205,7 @@ function CheckoutPage() {
                 data: { orderId: order.id, razorpayOrderId, razorpayPaymentId, razorpaySignature },
               });
               clear();
+              clearIdempotencyKey();
               toast.success("Payment successful!");
               navigate({ to: "/order/$orderId", params: { orderId: order.id } });
             } catch {
@@ -205,6 +227,7 @@ function CheckoutPage() {
       }
 
       clear();
+      clearIdempotencyKey();
       toast.success("Order placed!");
       navigate({ to: "/order/$orderId", params: { orderId: order.id } });
       setPlacing(false);
