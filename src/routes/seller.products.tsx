@@ -2,10 +2,11 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Plus, Trash2, Search, Pencil, Camera, Loader2 } from "lucide-react";
+import { Plus, Trash2, Search, Pencil, Camera, Loader2, ScanBarcode } from "lucide-react";
 import { useSeller } from "@/lib/seller";
 import { formatINR, type Product } from "@/lib/data";
 import { uploadProductImage } from "@/lib/seller-data/api.functions";
+import { lookupBarcode } from "@/lib/barcode/api.functions";
 import { fileToBase64 } from "@/lib/verification";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,6 +22,7 @@ import {
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { VerificationLockGate } from "@/components/seller/VerificationLockGate";
+import { BarcodeScanner } from "@/components/seller/BarcodeScanner";
 
 export const Route = createFileRoute("/seller/products")({
   component: SellerProducts,
@@ -29,6 +31,11 @@ export const Route = createFileRoute("/seller/products")({
 function SellerProducts() {
   const { products, toggleStock, removeProduct } = useSeller();
   const [query, setQuery] = useState("");
+  // Set when a barcode scan during "Add product" matches something already
+  // in this shop's own catalog — jumps straight to editing that product
+  // instead of letting the merchant accidentally create a second row for
+  // the same item. See ProductDialog's handleBarcodeDetected.
+  const [duplicateTarget, setDuplicateTarget] = useState<Product | null>(null);
 
   const filtered = products.filter((p) => p.name.toLowerCase().includes(query.toLowerCase()));
 
@@ -43,7 +50,17 @@ function SellerProducts() {
                 <Plus className="h-4 w-4" /> Add
               </Button>
             }
+            onDuplicateFound={setDuplicateTarget}
           />
+          {duplicateTarget && (
+            <ProductDialog
+              product={duplicateTarget}
+              open
+              onOpenChange={(next) => {
+                if (!next) setDuplicateTarget(null);
+              }}
+            />
+          )}
         </div>
 
         <div className="relative">
@@ -125,11 +142,30 @@ function SellerProducts() {
   );
 }
 
-function ProductDialog({ product, trigger }: { product?: Product; trigger: React.ReactNode }) {
-  const { addProduct, updateProduct } = useSeller();
+type ProductDialogProps = {
+  product?: Product;
+  /** Omit when the dialog is externally controlled (see `open`/`onOpenChange`) — used for the "jump to the duplicate's edit dialog" flow, which has no visible trigger of its own. */
+  trigger?: React.ReactNode;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  /** Add-mode only: fired when a scanned barcode matches a product already in this shop's catalog, instead of proceeding with a new one. */
+  onDuplicateFound?: (existing: Product) => void;
+};
+
+function ProductDialog({
+  product,
+  trigger,
+  open: controlledOpen,
+  onOpenChange: setControlledOpen,
+  onDuplicateFound,
+}: ProductDialogProps) {
+  const { addProduct, updateProduct, products } = useSeller();
   const queryClient = useQueryClient();
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = controlledOpen ?? internalOpen;
+  const setOpen = setControlledOpen ?? setInternalOpen;
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [scanning, setScanning] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [form, setForm] = useState({
     name: product?.name ?? "",
@@ -138,9 +174,44 @@ function ProductDialog({ product, trigger }: { product?: Product; trigger: React
     mrp: product?.mrp?.toString() ?? "",
     unit: product?.unit ?? "",
     category: product?.category ?? "",
+    barcode: product?.barcode ?? "",
   });
 
   const set = (k: keyof typeof form, v: string) => setForm((f) => ({ ...f, [k]: v }));
+
+  // Real name+unit+category prefill from a scanned barcode (see
+  // plan/tasks/decisions.md, 2026-07-25) — only fills fields the merchant
+  // hasn't already typed, never overwrites. A barcode already present in
+  // this shop's own catalog jumps to editing that product instead of
+  // creating a duplicate, mirroring the shop-level duplicate nudge in
+  // CreateShopStep.tsx.
+  async function handleBarcodeDetected(code: string) {
+    setScanning(false);
+    const existing = products.find((p) => p.barcode && p.barcode === code);
+    if (existing) {
+      toast("You already have this product — opening it to edit.");
+      onDuplicateFound?.(existing);
+      setOpen(false);
+      return;
+    }
+    set("barcode", code);
+    try {
+      const result = await lookupBarcode({ data: { barcode: code } });
+      if (result) {
+        setForm((f) => ({
+          ...f,
+          name: f.name.trim() ? f.name : result.name,
+          unit: f.unit.trim() ? f.unit : result.unit,
+          category: f.category.trim() ? f.category : result.category,
+        }));
+        toast.success(`Found: ${result.name}`);
+      } else {
+        toast("No match found — fill in the details");
+      }
+    } catch {
+      toast("Couldn't look up that barcode — fill in the details");
+    }
+  }
 
   async function handlePhotoChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -169,7 +240,9 @@ function ProductDialog({ product, trigger }: { product?: Product; trigger: React
     }
   }
 
-  const submit = () => {
+  const [submitting, setSubmitting] = useState(false);
+
+  const submit = async () => {
     if (!form.name.trim() || !form.price) {
       toast.error("Name and price are required");
       return;
@@ -182,25 +255,52 @@ function ProductDialog({ product, trigger }: { product?: Product; trigger: React
       unit: form.unit.trim() || "1 pc",
       category: form.category.trim() || "General",
       inStock: true,
+      barcode: form.barcode.trim() || undefined,
     };
-    if (product) {
-      updateProduct(product.id, payload);
-      toast.success("Product updated");
-    } else {
-      addProduct(payload);
-      toast.success("Product added");
+    setSubmitting(true);
+    try {
+      if (product) {
+        await updateProduct(product.id, payload);
+        toast.success("Product updated");
+      } else {
+        await addProduct(payload);
+        toast.success("Product added");
+      }
+      setOpen(false);
+    } catch (err) {
+      // Real server-side conflicts (e.g. a scanned barcode this shop
+      // already has — the 23505 path in addProduct/updateProduct,
+      // migration 0015) surface here instead of vanishing silently.
+      toast.error(err instanceof Error ? err.message : "Couldn't save this product.");
+    } finally {
+      setSubmitting(false);
     }
-    setOpen(false);
   };
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>{trigger}</DialogTrigger>
+      {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>{product ? "Edit product" : "Add product"}</DialogTitle>
         </DialogHeader>
-        <div className="space-y-3">
+        {scanning && (
+          <BarcodeScanner onDetected={handleBarcodeDetected} onClose={() => setScanning(false)} />
+        )}
+        <div className={cn("space-y-3", scanning && "hidden")}>
+          {!product && (
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={() => setScanning(true)}
+            >
+              <ScanBarcode className="h-4 w-4" /> Scan barcode
+            </Button>
+          )}
+          {form.barcode && (
+            <p className="text-center text-xs text-muted-foreground">Barcode: {form.barcode}</p>
+          )}
           {product && (
             <div className="flex items-center gap-3">
               <button
@@ -302,11 +402,19 @@ function ProductDialog({ product, trigger }: { product?: Product; trigger: React
             </div>
           </div>
         </div>
-        <DialogFooter>
-          <Button variant="hero" className="w-full" onClick={submit}>
-            {product ? "Save changes" : "Add product"}
-          </Button>
-        </DialogFooter>
+        {!scanning && (
+          <DialogFooter>
+            <Button variant="hero" className="w-full" disabled={submitting} onClick={submit}>
+              {submitting ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : product ? (
+                "Save changes"
+              ) : (
+                "Add product"
+              )}
+            </Button>
+          </DialogFooter>
+        )}
       </DialogContent>
     </Dialog>
   );
