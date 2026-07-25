@@ -119,18 +119,35 @@ type ShopRow = {
   delivery_fee_amount: number;
   free_delivery_above_amount: number;
   eta_minutes: number;
+  owner_id: string;
+  claimed: boolean;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  shop_verifications: any;
 };
 
 async function getShopRow(shopId: string): Promise<ShopRow> {
   const { data, error } = await admin()
     .from("shops")
     .select(
-      "id, name, emoji, city, pincode, delivery_fee_amount, free_delivery_above_amount, eta_minutes",
+      "id, name, emoji, city, pincode, delivery_fee_amount, free_delivery_above_amount, eta_minutes, owner_id, claimed, shop_verifications(overall_status)",
     )
     .eq("id", shopId)
     .single();
   if (error || !data) throw new Error(`Shop not found: ${shopId}`);
   return data;
+}
+
+/**
+ * Real gate alongside the browse-listing one in catalog/backend.server.ts —
+ * without this, a customer with a direct link to a claimed-but-unverified
+ * shop that already has products could still place a real order, making
+ * the browse filter purely cosmetic. See plan/tasks/decisions.md.
+ */
+function isShopAcceptingOrders(shop: ShopRow): boolean {
+  const verification = Array.isArray(shop.shop_verifications)
+    ? shop.shop_verifications[0]
+    : shop.shop_verifications;
+  return shop.claimed && verification?.overall_status === "approved";
 }
 
 async function priceItems(
@@ -252,10 +269,59 @@ export type PlaceOrderInput = {
   lng: number;
   /** Only a code is accepted — the discount amount is always recomputed here, never trusted from the client. */
   couponCode?: string;
+  /**
+   * Client-generated once per checkout attempt (checkout.tsx persists it in
+   * sessionStorage and reuses it across retries of the SAME attempt) — never
+   * a fresh value per retry. See the idempotency check below.
+   */
+  idempotencyKey: string;
 };
 
+/**
+ * `orders.idempotency_key` is a real unique column that existed since Phase C
+ * but nothing ever populated it — the only defense against a duplicate
+ * "Place Order" was the client's `disabled={placing}` button state, so a
+ * page refresh mid-request or a second tab created two full real orders (see
+ * plan/tasks/decisions.md 2026-07-22).
+ *
+ * If an order already exists under this exact key, this call is a retry of
+ * an attempt that already succeeded (or is concurrently succeeding) —
+ * returns that order instead of creating a second one. The `.eq("customer_id", ...)`
+ * scoping isn't just belt-and-suspenders: it stops a caller from fetching
+ * someone else's order by guessing/reusing their idempotency key.
+ */
+async function findOrderByIdempotencyKey(
+  customerId: string,
+  idempotencyKey: string,
+): Promise<CustomerOrder | null> {
+  const { data, error } = await admin()
+    .from("orders")
+    .select(ORDER_SELECT)
+    .eq("customer_id", customerId)
+    .eq("idempotency_key", idempotencyKey)
+    .maybeSingle();
+  if (error) throw new Error(`placeOrder idempotency check failed: ${error.message}`);
+  return data ? mapOrderRow(data) : null;
+}
+
 export async function placeOrder(input: PlaceOrderInput): Promise<CustomerOrder> {
+  const existing = await findOrderByIdempotencyKey(input.customerId, input.idempotencyKey);
+  if (existing) return existing;
+
   const shop = await getShopRow(input.shopId);
+  // A single Supabase Auth user can hold both a `shops` row (as owner) and
+  // place orders as a `customer_id` — nothing else in this app separates a
+  // "seller account" from a "customer account." Without this, a seller can
+  // self-order, walk it through to "Delivered" via their own seller/partner
+  // actions, and leave themselves a real review that recomputes the shop's
+  // rating_avg — the exact trust signal real customers use to pick a shop.
+  // See plan/tasks/decisions.md 2026-07-22.
+  if (shop.owner_id === input.customerId) {
+    throw new Error("You can't place an order at your own shop.");
+  }
+  if (!isShopAcceptingOrders(shop)) {
+    throw new Error("This shop isn't accepting orders yet.");
+  }
   const { lines, itemsAmount } = await priceItems(input.shopId, input.items);
   const deliveryAmount =
     itemsAmount >= shop.free_delivery_above_amount ? 0 : shop.delivery_fee_amount;
@@ -311,10 +377,22 @@ export async function placeOrder(input: PlaceOrderInput): Promise<CustomerOrder>
       promo_code: discountAmount > 0 ? input.couponCode?.trim().toUpperCase() : null,
       pickup_otp: pickupOtp,
       delivery_otp: deliveryOtp,
+      idempotency_key: input.idempotencyKey,
     })
     .select("*")
     .single();
-  if (orderErr) throw new Error(`placeOrder failed: ${orderErr.message}`);
+  if (orderErr) {
+    // A genuine concurrent retry of the SAME key (e.g. a double-click that
+    // both fired, or a refresh that raced the original request) can lose
+    // this exact insert to the other request — Postgres rejects it as a
+    // real unique-constraint violation rather than silently duplicating.
+    // Treat that specific case as a successful retry, not a failure.
+    if (orderErr.code === "23505") {
+      const winner = await findOrderByIdempotencyKey(input.customerId, input.idempotencyKey);
+      if (winner) return winner;
+    }
+    throw new Error(`placeOrder failed: ${orderErr.message}`);
+  }
 
   const { error: itemsErr } = await admin()
     .from("order_items")
