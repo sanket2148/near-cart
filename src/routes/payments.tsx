@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Loader2, CreditCard, Smartphone, Landmark, Banknote } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
-import { EmailOtpAuth } from "@/components/EmailOtpAuth";
+import { EmailPasswordAuth } from "@/components/EmailPasswordAuth";
 import { useAuth } from "@/lib/auth";
 import { listOrders } from "@/lib/orders/api.functions";
 import { formatINR } from "@/lib/data";
@@ -46,7 +46,7 @@ function PaymentsPage() {
         <h1 className="text-xl font-extrabold">Payment Methods</h1>
         <p className="mt-1 text-sm text-muted-foreground">Log in to see your payment history.</p>
         <div className="mt-4">
-          <EmailOtpAuth onSuccess={() => toast.success("Logged in!")} />
+          <EmailPasswordAuth onSuccess={() => toast.success("Logged in!")} />
         </div>
       </AppShell>
     );

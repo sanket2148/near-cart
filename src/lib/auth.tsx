@@ -1,17 +1,18 @@
-// Real email+OTP auth via Supabase Auth, through the new src/lib/auth-session/
-// server functions (real cookie-based session — see plan/tasks/decisions.md
-// for the authorization-hardening plan this is Phase 1 of). Replaces the old
-// custom localStorage dev-mode phone/OTP flow and src/lib/auth-bridge/
-// (both retired). Shared by all three user types (customer, seller, partner).
+// Real email+password auth via Supabase Auth, through
+// src/lib/auth-session/'s server functions (real cookie-based session — see
+// plan/tasks/decisions.md for the authorization-hardening plan this
+// continues). Replaced email OTP 2026-07-24 — no custom SMTP is configured
+// for this project, so OTP codes rode Supabase's default, heavily rate-
+// limited email provider and could go undelivered; password auth needs no
+// outbound email for login at all. Shared by all three user types
+// (customer, seller, partner).
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
-  createContext,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-  type ReactNode,
-} from "react";
-import { requestOtp as requestOtpFn, verifyOtp as verifyOtpFn, logout as logoutFn, getCurrentUser } from "./auth-session/api.functions";
+  signIn as signInFn,
+  signUp as signUpFn,
+  logout as logoutFn,
+  getCurrentUser,
+} from "./auth-session/api.functions";
 
 export type AuthUser = {
   id: string;
@@ -21,8 +22,8 @@ export type AuthUser = {
 type AuthContextValue = {
   user: AuthUser | null;
   loading: boolean;
-  requestOtp: (email: string) => Promise<void>;
-  verifyOtp: (email: string, code: string) => Promise<AuthUser>;
+  signIn: (email: string, password: string) => Promise<AuthUser>;
+  signUp: (email: string, password: string) => Promise<AuthUser>;
   logout: () => Promise<void>;
 };
 
@@ -42,11 +43,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     () => ({
       user,
       loading,
-      requestOtp: async (email: string) => {
-        await requestOtpFn({ data: { email } });
+      signIn: async (email: string, password: string) => {
+        const account = await signInFn({ data: { email, password } });
+        setUser(account);
+        return account;
       },
-      verifyOtp: async (email: string, code: string) => {
-        const account = await verifyOtpFn({ data: { email, code } });
+      signUp: async (email: string, password: string) => {
+        const account = await signUpFn({ data: { email, password } });
         setUser(account);
         return account;
       },

@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { PartnerProvider, hasProfile } from "@/lib/partner";
 import { PartnerShell } from "@/components/partner/PartnerShell";
-import { EmailOtpAuth } from "@/components/EmailOtpAuth";
+import { EmailPasswordAuth } from "@/components/EmailPasswordAuth";
 import { CreatePartnerProfile } from "@/components/partner/CreatePartnerProfile";
 import { useAuth } from "@/lib/auth";
 
@@ -47,7 +47,7 @@ function PartnerLayout() {
           <p className="mb-4 text-center text-sm text-muted-foreground">
             Log in to go online and start accepting deliveries.
           </p>
-          <EmailOtpAuth onSuccess={() => toast.success("Logged in!")} />
+          <EmailPasswordAuth onSuccess={() => toast.success("Logged in!")} />
         </div>
       </div>
     );

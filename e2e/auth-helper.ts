@@ -3,11 +3,12 @@ import type { BrowserContext } from "@playwright/test";
 
 // Mints a real Supabase session for a throwaway test account and injects the
 // exact __Host-nc-at/__Host-nc-rt cookies src/lib/auth-session/cookies.server.ts
-// sets on a real login, so tests can exercise authenticated pages without
-// driving the OTP UI (email_otp from admin.generateLink uses a different
-// token format than the real signInWithOtp email flow, confirmed live this
-// session — not reliable to type through the 6-slot InputOTP UI). A separate
-// real-login-flow test still drives the UI directly where that matters.
+// sets on a real login, so most tests can exercise authenticated pages
+// without re-driving the login UI on every single test. (Login moved from
+// email OTP to email+password 2026-07-24 — signInWithPassword below is now
+// the exact same call the real EmailPasswordAuth component itself makes,
+// not a workaround for anything; a real login-UI e2e test is fully
+// straightforward now, unlike the old OTP flow's code-format mismatch.)
 
 function env() {
   const url = process.env.VITE_SUPABASE_URL;
