@@ -15,9 +15,11 @@ type Props = {
   center: LatLng;
   onChange: (coords: LatLng) => void;
   className?: string;
+  /** false renders a read-only pin (no drag, no gesture-trapping) — e.g. the shop page's "here's where we are" map, as opposed to the "confirm your exact location" editor. Defaults to true. */
+  interactive?: boolean;
 };
 
-export function LocationPinMap({ center, onChange, className }: Props) {
+export function LocationPinMap({ center, onChange, className, interactive = true }: Props) {
   const divRef = useRef<HTMLDivElement>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const mapRef = useRef<any>(null);
@@ -46,7 +48,7 @@ export function LocationPinMap({ center, onChange, className }: Props) {
           zoom: 17, // close enough to actually distinguish a building/gate, unlike DeliveryMap's overview zoom
           disableDefaultUI: true,
           zoomControl: true,
-          gestureHandling: "greedy",
+          gestureHandling: interactive ? "greedy" : "cooperative",
           clickableIcons: false,
         });
         mapRef.current = map;
@@ -54,8 +56,8 @@ export function LocationPinMap({ center, onChange, className }: Props) {
         const marker = new maps.Marker({
           position: center,
           map,
-          draggable: true,
-          title: "Drag to your exact location",
+          draggable: interactive,
+          title: interactive ? "Drag to your exact location" : undefined,
           icon: {
             path: maps.SymbolPath.CIRCLE,
             scale: 14,
@@ -65,11 +67,13 @@ export function LocationPinMap({ center, onChange, className }: Props) {
             strokeWeight: 2,
           },
         });
-        marker.addListener("dragend", () => {
-          const pos = marker.getPosition();
-          if (!pos) return;
-          onChangeRef.current({ lat: pos.lat(), lng: pos.lng() });
-        });
+        if (interactive) {
+          marker.addListener("dragend", () => {
+            const pos = marker.getPosition();
+            if (!pos) return;
+            onChangeRef.current({ lat: pos.lat(), lng: pos.lng() });
+          });
+        }
         markerRef.current = marker;
 
         setStatus("ready");

@@ -33,6 +33,7 @@ export const Route = createFileRoute("/")({
 function Index() {
   const navigate = useNavigate();
   const [active, setActive] = useState<string | null>(null);
+  const [openOnly, setOpenOnly] = useState(false);
   const { state: locationState } = useLocation();
 
   const { data: categories = [] } = useQuery({
@@ -55,7 +56,8 @@ function Index() {
       }),
   });
 
-  const visibleShops = active ? shops.filter((s) => s.category === active) : shops;
+  const categoryFiltered = active ? shops.filter((s) => s.category === active) : shops;
+  const visibleShops = openOnly ? categoryFiltered.filter((s) => s.isOpen) : categoryFiltered;
   const openShops = [...visibleShops].sort((a, b) => Number(b.isOpen) - Number(a.isOpen));
 
   return (
@@ -125,15 +127,37 @@ function Index() {
 
       {/* Shops */}
       <section className="mt-6">
-        <div className="mb-3 flex items-center justify-between">
+        <div className="mb-3 flex items-center justify-between gap-2">
           <h2 className="text-base font-bold">
             {active ? categories.find((c) => c.id === active)?.name : "Shops near you"}
           </h2>
-          {active && (
-            <button onClick={() => setActive(null)} className="text-sm font-semibold text-primary">
-              Clear
+          <div className="flex shrink-0 items-center gap-3">
+            <button
+              onClick={() => setOpenOnly((v) => !v)}
+              className={cn(
+                "flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold transition-colors",
+                openOnly
+                  ? "border-primary bg-primary/10 text-primary"
+                  : "border-border bg-card text-muted-foreground hover:border-primary/40",
+              )}
+            >
+              <span
+                className={cn(
+                  "h-1.5 w-1.5 rounded-full",
+                  openOnly ? "bg-primary" : "bg-muted-foreground/50",
+                )}
+              />
+              Open now
             </button>
-          )}
+            {active && (
+              <button
+                onClick={() => setActive(null)}
+                className="text-sm font-semibold text-primary"
+              >
+                Clear
+              </button>
+            )}
+          </div>
         </div>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
           {shopsLoading ? (
@@ -159,7 +183,7 @@ function Index() {
               ))}
               {openShops.length === 0 && (
                 <p className="col-span-full py-8 text-center text-sm text-muted-foreground">
-                  No shops in this category yet.
+                  {openOnly ? "No shops are open right now." : "No shops in this category yet."}
                 </p>
               )}
             </>

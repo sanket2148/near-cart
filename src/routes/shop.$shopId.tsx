@@ -2,11 +2,12 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ArrowLeft, Star, Clock, Bike, Search } from "lucide-react";
+import { ArrowLeft, Star, Clock, Bike, Search, MapPin, Navigation, Copy } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { ProductCard } from "@/components/ProductCard";
 import { ShopReviews } from "@/components/ShopReviews";
 import { CartBar } from "@/components/CartBar";
+import { LocationPinMap } from "@/components/LocationPinMap";
 import { getShop, getShopProducts } from "@/lib/catalog/api.functions";
 import type { Product } from "@/lib/data";
 import { listWishlist, addToWishlist, removeFromWishlist } from "@/lib/wishlist/api.functions";
@@ -42,6 +43,7 @@ export const Route = createFileRoute("/shop/$shopId")({
 function ShopPage() {
   const { shop, products } = Route.useLoaderData() as { shop: any; products: Product[] };
   const [query, setQuery] = useState("");
+  const [activeTab, setActiveTab] = useState<"menu" | "reviews">("menu");
   const { user } = useAuth();
   const queryClient = useQueryClient();
 
@@ -87,6 +89,16 @@ function ShopPage() {
   const filtered = products.filter((p) =>
     p.name.toLowerCase().includes(query.trim().toLowerCase()),
   );
+  const directionsUrl = `https://www.google.com/maps/dir/?api=1&destination=${shop.lat},${shop.lng}`;
+
+  async function copyAddress() {
+    try {
+      await navigator.clipboard.writeText(shop.area);
+      toast.success("Address copied");
+    } catch {
+      toast.error("Couldn't copy address");
+    }
+  }
 
   return (
     <AppShell subtitle={shop.area} wide>
@@ -140,90 +152,167 @@ function ShopPage() {
         )}
       </div>
 
-      {/* Search within shop */}
-      <div className="mt-4 flex items-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5 shadow-card">
-        <Search className="h-4 w-4 text-primary" />
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder={`Search in ${shop.name.split(" ")[0]}…`}
-          className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-        />
+      {/* Address + directions — full sidebar card on desktop (below), a compact link here on mobile */}
+      <a
+        href={directionsUrl}
+        target="_blank"
+        rel="noreferrer"
+        className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-primary lg:hidden"
+      >
+        <Navigation className="h-3.5 w-3.5" /> Get directions
+      </a>
+
+      {/* Tabs */}
+      <div className="sticky top-14 z-30 -mx-4 mt-4 flex gap-5 border-b border-border bg-background/95 px-4 backdrop-blur-md">
+        {(
+          [
+            { key: "menu", label: "Menu" },
+            { key: "reviews", label: "Reviews" },
+          ] as const
+        ).map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setActiveTab(t.key)}
+            className={cn(
+              "border-b-2 pb-2.5 pt-3 text-sm font-bold transition-colors",
+              activeTab === t.key
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {t.label}
+          </button>
+        ))}
       </div>
 
-      {/* Category chips */}
-      {!query && categoriesInShop.length > 1 && (
-        <div className="-mx-4 mt-3 flex gap-2 overflow-x-auto px-4 pb-1 no-scrollbar">
-          {categoriesInShop.map((c) => (
-            <a
-              key={c}
-              href={`#cat-${c}`}
-              className="shrink-0 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-semibold text-muted-foreground hover:border-primary/40"
-            >
-              {c}
-            </a>
-          ))}
-        </div>
-      )}
-
-      {/* Products */}
-      <div className="mt-4 space-y-5">
-        {query ? (
-          <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2">
-            {filtered.length === 0 ? (
-              <p className="col-span-full py-8 text-center text-sm text-muted-foreground">
-                No matches found.
-              </p>
-            ) : (
-              filtered.map((p) => (
-                <ProductCard
-                  key={p.id}
-                  product={p}
-                  wishlisted={wishlistedIds.has(p.id)}
-                  onToggleWishlist={toggleWishlist}
+      <div className="mt-4 lg:grid lg:grid-cols-[1fr_18rem] lg:gap-6">
+        <div className="min-w-0">
+          {activeTab === "menu" ? (
+            <>
+              {/* Search within shop */}
+              <div className="flex items-center gap-2 rounded-xl border border-border bg-card px-4 py-2.5 shadow-card">
+                <Search className="h-4 w-4 text-primary" />
+                <input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder={`Search in ${shop.name.split(" ")[0]}…`}
+                  className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
                 />
-              ))
-            )}
-          </div>
-        ) : categoriesInShop.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center">
-            {shop.claimed === false ? (
-              <>
-                <p className="text-sm font-semibold">
-                  This shop was added from public listings and hasn't started taking orders yet.
-                </p>
-                <Link to="/seller" className="mt-2 inline-block text-sm font-semibold text-primary">
-                  Is this your shop? Claim it →
-                </Link>
-              </>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                This shop hasn't added any products yet. Check back soon!
-              </p>
-            )}
-          </div>
-        ) : (
-          categoriesInShop.map((c) => (
-            <section key={c} id={`cat-${c}`} className="scroll-mt-20">
-              <h2 className={cn("mb-2.5 text-sm font-bold text-muted-foreground")}>{c}</h2>
-              <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2">
-                {products
-                  .filter((p) => p.category === c)
-                  .map((p) => (
-                    <ProductCard
-                      key={p.id}
-                      product={p}
-                      wishlisted={wishlistedIds.has(p.id)}
-                      onToggleWishlist={toggleWishlist}
-                    />
-                  ))}
               </div>
-            </section>
-          ))
-        )}
-      </div>
 
-      <ShopReviews shopId={shop.id} rating={shop.rating} ratingCount={shop.ratingCount} />
+              {/* Category chips */}
+              {!query && categoriesInShop.length > 1 && (
+                <div className="-mx-4 mt-3 flex gap-2 overflow-x-auto px-4 pb-1 no-scrollbar">
+                  {categoriesInShop.map((c) => (
+                    <a
+                      key={c}
+                      href={`#cat-${c}`}
+                      className="shrink-0 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-semibold text-muted-foreground hover:border-primary/40"
+                    >
+                      {c}
+                    </a>
+                  ))}
+                </div>
+              )}
+
+              {/* Products */}
+              <div className="mt-4 space-y-5">
+                {query ? (
+                  <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2">
+                    {filtered.length === 0 ? (
+                      <p className="col-span-full py-8 text-center text-sm text-muted-foreground">
+                        No matches found.
+                      </p>
+                    ) : (
+                      filtered.map((p) => (
+                        <ProductCard
+                          key={p.id}
+                          product={p}
+                          wishlisted={wishlistedIds.has(p.id)}
+                          onToggleWishlist={toggleWishlist}
+                        />
+                      ))
+                    )}
+                  </div>
+                ) : categoriesInShop.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center">
+                    {shop.claimed === false ? (
+                      <>
+                        <p className="text-sm font-semibold">
+                          This shop was added from public listings and hasn't started taking orders yet.
+                        </p>
+                        <Link to="/seller" className="mt-2 inline-block text-sm font-semibold text-primary">
+                          Is this your shop? Claim it →
+                        </Link>
+                      </>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        This shop hasn't added any products yet. Check back soon!
+                      </p>
+                    )}
+                  </div>
+                ) : (
+                  categoriesInShop.map((c) => (
+                    <section key={c} id={`cat-${c}`} className="scroll-mt-20">
+                      <h2 className={cn("mb-2.5 text-sm font-bold text-muted-foreground")}>{c}</h2>
+                      <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2">
+                        {products
+                          .filter((p) => p.category === c)
+                          .map((p) => (
+                            <ProductCard
+                              key={p.id}
+                              product={p}
+                              wishlisted={wishlistedIds.has(p.id)}
+                              onToggleWishlist={toggleWishlist}
+                            />
+                          ))}
+                      </div>
+                    </section>
+                  ))
+                )}
+              </div>
+            </>
+          ) : (
+            <ShopReviews shopId={shop.id} rating={shop.rating} ratingCount={shop.ratingCount} />
+          )}
+        </div>
+
+        {/* Sidebar — desktop only */}
+        <aside className="hidden lg:block">
+          <div className="lg:sticky lg:top-20">
+            <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-card">
+              <LocationPinMap
+                center={{ lat: shop.lat, lng: shop.lng }}
+                onChange={() => {}}
+                interactive={false}
+                className="h-40 w-full"
+              />
+              <div className="p-3.5">
+                <p className="flex items-start gap-1.5 text-sm text-foreground">
+                  <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                  {shop.area}
+                </p>
+                <div className="mt-3 flex gap-2">
+                  <button
+                    onClick={copyAddress}
+                    className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold text-foreground hover:border-primary/40"
+                  >
+                    <Copy className="h-4 w-4" /> Copy
+                  </button>
+                  <a
+                    href={directionsUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-border bg-background px-3 py-2 text-sm font-semibold text-primary hover:border-primary/40"
+                  >
+                    <Navigation className="h-4 w-4" /> Direction
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
+        </aside>
+      </div>
 
       <CartBar />
     </AppShell>

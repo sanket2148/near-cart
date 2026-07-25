@@ -55,9 +55,15 @@ export function ShopCard({ shop }: { shop: Shop }) {
                 <VerificationBadge tier={shop.badgeTier} size="sm" showLabel={false} />
               )}
             </div>
-            <span className="flex shrink-0 items-center gap-1 rounded-md bg-success px-1.5 py-0.5 text-xs font-bold text-success-foreground">
-              <Star className="h-3 w-3 fill-current" /> {shop.rating}
-            </span>
+            {shop.ratingCount > 0 ? (
+              <span className="flex shrink-0 items-center gap-1 rounded-md bg-success px-1.5 py-0.5 text-xs font-bold text-success-foreground">
+                <Star className="h-3 w-3 fill-current" /> {shop.rating}
+              </span>
+            ) : (
+              <span className="flex shrink-0 items-center rounded-md bg-muted px-1.5 py-0.5 text-xs font-bold text-muted-foreground">
+                New
+              </span>
+            )}
           </div>
           <p className="truncate text-sm text-muted-foreground">{shop.tagline}</p>
           <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
