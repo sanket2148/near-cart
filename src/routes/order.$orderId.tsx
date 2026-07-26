@@ -98,9 +98,10 @@ function OrderPage() {
   const sim = useDeliverySimulation(orderId, session);
 
   // Create the shared tracking session for this order (once) — pickup/drop
-  // only; status and rider position come from the real backend below.
+  // only; status and rider position come from the real backend below. Not
+  // used at all for a self-pickup order — no delivery partner ever exists.
   useEffect(() => {
-    if (!order) return;
+    if (!order || order.fulfillmentType === "pickup") return;
     const pickup = shop
       ? { lat: shop.lat, lng: shop.lng, label: `${shop.emoji} ${shop.name}` }
       : { ...geocodeSeed(order.shopName), label: order.shopName };
@@ -119,7 +120,7 @@ function OrderPage() {
   const { data: tracking } = useQuery({
     queryKey: ["order-tracking", orderId],
     queryFn: () => getOrderTracking({ data: { orderId } }),
-    enabled: Boolean(order),
+    enabled: Boolean(order) && order?.fulfillmentType !== "pickup",
     // Same safety-net reasoning as the `order` query above.
     refetchInterval: (query) =>
       query.state.data?.status === "delivered" ? false : live ? SAFETY_NET_POLL_MS : 5000,
@@ -252,7 +253,15 @@ function OrderPage() {
 
   return (
     <AppShell hideNav>
-      {session ? (
+      {order.fulfillmentType === "pickup" ? (
+        <PickupCodeCard
+          shopName={order.shopName}
+          shopEmoji={order.shopEmoji}
+          shopAddress={shop?.area}
+          pickupCode={order.pickupCode}
+          isPickedUp={order.status === "delivered"}
+        />
+      ) : session ? (
         <LiveTrackView
           session={session}
           controls={
@@ -302,7 +311,11 @@ function OrderPage() {
       <div className="mt-4 rounded-2xl border border-border bg-card p-4 shadow-card">
         <div className="mb-3 flex items-center justify-between">
           <h2 className="text-sm font-bold">Order summary</h2>
-          <Badge variant={STATUS_VARIANT[order.status]}>{STATUS_LABEL[order.status]}</Badge>
+          <Badge variant={STATUS_VARIANT[order.status]}>
+            {order.fulfillmentType === "pickup" && order.status === "delivered"
+              ? "Picked up"
+              : STATUS_LABEL[order.status]}
+          </Badge>
         </div>
         {order.lines.map((l) => (
           <div key={l.name} className="flex justify-between py-0.5 text-sm">
@@ -379,5 +392,48 @@ function OrderPage() {
         </Button>
       </div>
     </AppShell>
+  );
+}
+
+function PickupCodeCard({
+  shopName,
+  shopEmoji,
+  shopAddress,
+  pickupCode,
+  isPickedUp,
+}: {
+  shopName: string;
+  shopEmoji: string;
+  shopAddress?: string;
+  pickupCode?: string;
+  isPickedUp: boolean;
+}) {
+  return (
+    <div className="rounded-2xl border border-border bg-card p-4 shadow-card">
+      <div className="flex items-center gap-3">
+        <span className="flex h-11 w-11 items-center justify-center rounded-full bg-secondary text-xl">
+          {shopEmoji}
+        </span>
+        <div className="flex-1">
+          <p className="text-sm font-bold">{shopName}</p>
+          {shopAddress && <p className="text-xs text-muted-foreground">{shopAddress}</p>}
+        </div>
+      </div>
+
+      {isPickedUp ? (
+        <p className="mt-4 text-center text-sm font-medium text-muted-foreground">
+          ✓ Picked up — enjoy!
+        </p>
+      ) : (
+        <div className="mt-4 rounded-xl bg-primary/5 p-4 text-center">
+          <p className="text-xs font-semibold text-muted-foreground">
+            Show this code to the shop when you collect your order
+          </p>
+          <p className="mt-1 text-3xl font-extrabold tracking-widest text-primary">
+            {pickupCode ?? "----"}
+          </p>
+        </div>
+      )}
+    </div>
   );
 }

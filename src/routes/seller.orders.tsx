@@ -10,10 +10,11 @@ import {
   Bike,
   ArrowRight,
   Navigation2,
+  KeyRound,
 } from "lucide-react";
 import {
   useSeller,
-  STATUS_LABEL,
+  sellerStatusLabel,
   nextStatus,
   timeAgo,
   type SellerOrder,
@@ -116,18 +117,19 @@ function OrderCard({ order }: { order: SellerOrder }) {
   const [open, setOpen] = useState(order.status === "new");
 
   const partner = partners.find((p) => p.id === order.partnerId);
-  const next = nextStatus(order.status);
+  const isPickup = order.fulfillmentType === "pickup";
+  const next = nextStatus(order.status, order.fulfillmentType);
   const needsPartner =
-    (order.status === "ready" || order.status === "preparing") && !order.partnerId;
+    !isPickup && (order.status === "ready" || order.status === "preparing") && !order.partnerId;
 
   const handleAdvance = () => {
-    if (order.status === "ready" && !order.partnerId) {
+    if (!isPickup && order.status === "ready" && !order.partnerId) {
       toast.error("Assign a delivery partner first");
       return;
     }
     advanceOrder(order.id);
-    const n = order.status === "new" ? "accepted" : nextStatus(order.status);
-    if (n) toast.success(`Order marked ${STATUS_LABEL[n]}`);
+    const n = order.status === "new" ? "accepted" : nextStatus(order.status, order.fulfillmentType);
+    if (n) toast.success(`Order marked ${sellerStatusLabel(n, order.fulfillmentType)}`);
   };
 
   return (
@@ -145,7 +147,7 @@ function OrderCard({ order }: { order: SellerOrder }) {
                 statusTone[order.status],
               )}
             >
-              {STATUS_LABEL[order.status]}
+              {sellerStatusLabel(order.status, order.fulfillmentType)}
             </span>
           </span>
           <span className="text-xs text-muted-foreground">
@@ -182,7 +184,7 @@ function OrderCard({ order }: { order: SellerOrder }) {
           <div className="space-y-1.5 rounded-xl bg-muted/50 p-3 text-sm">
             <p className="flex items-start gap-2">
               <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-              <span>{order.address}</span>
+              <span>{isPickup ? "Self-pickup — no delivery address" : order.address}</span>
             </p>
             <p className="flex items-center gap-2">
               <Phone className="h-4 w-4 shrink-0 text-primary" />
@@ -193,8 +195,20 @@ function OrderCard({ order }: { order: SellerOrder }) {
             </p>
           </div>
 
+          {/* Pickup code — the seller checks this against what the customer shows at handoff */}
+          {isPickup && order.status !== "new" && order.status !== "rejected" && (
+            <div className="rounded-xl border border-border p-3">
+              <p className="flex items-center gap-2 text-xs font-bold text-muted-foreground">
+                <KeyRound className="h-4 w-4 text-primary" /> Pickup code
+              </p>
+              <p className="mt-2 text-2xl font-extrabold tracking-widest">
+                {order.pickupOtp ?? "----"}
+              </p>
+            </div>
+          )}
+
           {/* Delivery partner */}
-          {order.status !== "new" && order.status !== "rejected" && (
+          {!isPickup && order.status !== "new" && order.status !== "rejected" && (
             <div className="rounded-xl border border-border p-3">
               <p className="flex items-center gap-2 text-xs font-bold text-muted-foreground">
                 <Bike className="h-4 w-4 text-primary" /> Delivery partner
@@ -223,7 +237,7 @@ function OrderCard({ order }: { order: SellerOrder }) {
           )}
 
           {/* Live tracking */}
-          {["ready", "out_for_delivery", "delivered"].includes(order.status) && (
+          {!isPickup && ["ready", "out_for_delivery", "delivered"].includes(order.status) && (
             <Link
               to="/seller/track/$orderId"
               params={{ orderId: order.id }}
@@ -259,11 +273,15 @@ function OrderCard({ order }: { order: SellerOrder }) {
               disabled={needsPartner && order.status === "ready"}
               onClick={handleAdvance}
             >
-              Mark as {STATUS_LABEL[next]} <ArrowRight className="h-4 w-4" />
+              Mark as {sellerStatusLabel(next, order.fulfillmentType)} <ArrowRight className="h-4 w-4" />
             </Button>
           ) : (
             <p className="text-center text-sm font-semibold text-muted-foreground">
-              {order.status === "delivered" ? "✓ Completed" : "Rejected"}
+              {order.status === "delivered"
+                ? isPickup
+                  ? "✓ Picked up"
+                  : "✓ Completed"
+                : "Rejected"}
             </p>
           )}
         </div>

@@ -1,7 +1,7 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, MapPin, Wallet, Check, Clock, Zap, Loader2, Tag, X } from "lucide-react";
+import { ArrowLeft, MapPin, Wallet, Check, Clock, Zap, Loader2, Tag, X, Store, Bike } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { EmailPasswordAuth } from "@/components/EmailPasswordAuth";
@@ -61,6 +61,7 @@ function CheckoutPage() {
   });
 
   const [address, setAddress] = useState("Home · 12, 5th Cross, Koramangala, Bengaluru");
+  const [fulfillment, setFulfillment] = useState<"delivery" | "pickup">("delivery");
   const [slot, setSlot] = useState<"now" | "later">("now");
   const [locationModalOpen, setLocationModalOpen] = useState(false);
 
@@ -72,10 +73,12 @@ function CheckoutPage() {
   // location.tsx) so a fresh full-page load of /checkout doesn't briefly
   // ask again for a customer who already has a real location saved — not
   // gated on dismissedAt though, unlike AppShell's prompt, since this one
-  // is meant to ask again regardless of an earlier "Maybe later".
+  // is meant to ask again regardless of an earlier "Maybe later". Skipped
+  // entirely for self-pickup — no delivery coordinates are needed.
   useEffect(() => {
+    if (fulfillment === "pickup") return;
     if (locationHydrated && locationState.status === "unset") setLocationModalOpen(true);
-  }, [locationHydrated, locationState.status]);
+  }, [locationHydrated, locationState.status, fulfillment]);
   const [payment, setPayment] = useState<(typeof payments)[number]["id"]>("upi");
   const [placing, setPlacing] = useState(false);
   const [couponInput, setCouponInput] = useState("");
@@ -108,7 +111,7 @@ function CheckoutPage() {
     );
   }
 
-  const deliveryFee = subtotal >= shop.freeAbove ? 0 : shop.deliveryFee;
+  const deliveryFee = fulfillment === "pickup" ? 0 : subtotal >= shop.freeAbove ? 0 : shop.deliveryFee;
   const handling = 9;
   const discount = appliedCoupon?.discountAmount ?? 0;
   const total = Math.max(0, subtotal + deliveryFee + handling - discount);
@@ -147,6 +150,7 @@ function CheckoutPage() {
           shopId: shop.id,
           items: lines.map((l) => ({ productId: l.product.id, quantity: l.quantity })),
           couponCode: couponInput.trim(),
+          fulfillmentType: fulfillment,
         },
       });
       if (quote.couponError) {
@@ -179,9 +183,14 @@ function CheckoutPage() {
           shopId: shop.id,
           items: lines.map((l) => ({ productId: l.product.id, quantity: l.quantity })),
           paymentMethod: payment,
-          addressText: address,
-          lat: locationState.coords?.lat ?? shop.lat,
-          lng: locationState.coords?.lng ?? shop.lng,
+          fulfillmentType: fulfillment,
+          ...(fulfillment === "delivery"
+            ? {
+                addressText: address,
+                lat: locationState.coords?.lat ?? shop.lat,
+                lng: locationState.coords?.lng ?? shop.lng,
+              }
+            : {}),
           couponCode: appliedCoupon?.code,
           idempotencyKey: getOrCreateIdempotencyKey(),
         },
@@ -250,23 +259,71 @@ function CheckoutPage() {
 
       <h1 className="text-xl font-extrabold">Checkout</h1>
 
-      {/* Address */}
+      {/* Fulfillment */}
       <section className="mt-4 rounded-2xl border border-border bg-card p-4 shadow-card">
-        <div className="mb-2 flex items-center gap-2 text-sm font-bold">
-          <MapPin className="h-4 w-4 text-primary" /> Delivery address
+        <div className="mb-3 flex items-center gap-2 text-sm font-bold">
+          <Store className="h-4 w-4 text-primary" /> How would you like this?
         </div>
-        <textarea
-          value={address}
-          onChange={(e) => setAddress(e.target.value)}
-          rows={2}
-          className="w-full resize-none rounded-lg border border-border bg-background p-2.5 text-sm outline-none focus:border-primary"
-        />
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={() => setFulfillment("delivery")}
+            className={cn(
+              "flex flex-col items-start gap-0.5 rounded-lg border p-3 text-left transition-colors",
+              fulfillment === "delivery" ? "border-primary bg-primary/5" : "border-border",
+            )}
+          >
+            <span
+              className={cn(
+                "flex items-center gap-1.5 text-sm font-semibold",
+                fulfillment === "delivery" && "text-primary",
+              )}
+            >
+              <Bike className="h-4 w-4" /> Delivery
+            </span>
+            <span className="text-xs text-muted-foreground">
+              {deliveryFee > 0 ? formatINR(shop.deliveryFee) : "Free"} · ~{shop.etaMinutes} min
+            </span>
+          </button>
+          <button
+            onClick={() => setFulfillment("pickup")}
+            className={cn(
+              "flex flex-col items-start gap-0.5 rounded-lg border p-3 text-left transition-colors",
+              fulfillment === "pickup" ? "border-primary bg-primary/5" : "border-border",
+            )}
+          >
+            <span
+              className={cn(
+                "flex items-center gap-1.5 text-sm font-semibold",
+                fulfillment === "pickup" && "text-primary",
+              )}
+            >
+              <Store className="h-4 w-4" /> Self-pickup
+            </span>
+            <span className="text-xs text-muted-foreground">Free · collect at the shop</span>
+          </button>
+        </div>
       </section>
+
+      {/* Address */}
+      {fulfillment === "delivery" && (
+        <section className="mt-4 rounded-2xl border border-border bg-card p-4 shadow-card">
+          <div className="mb-2 flex items-center gap-2 text-sm font-bold">
+            <MapPin className="h-4 w-4 text-primary" /> Delivery address
+          </div>
+          <textarea
+            value={address}
+            onChange={(e) => setAddress(e.target.value)}
+            rows={2}
+            className="w-full resize-none rounded-lg border border-border bg-background p-2.5 text-sm outline-none focus:border-primary"
+          />
+        </section>
+      )}
 
       {/* Slot */}
       <section className="mt-4 rounded-2xl border border-border bg-card p-4 shadow-card">
         <div className="mb-3 flex items-center gap-2 text-sm font-bold">
-          <Clock className="h-4 w-4 text-primary" /> Delivery time
+          <Clock className="h-4 w-4 text-primary" />
+          {fulfillment === "pickup" ? "Pickup time" : "Delivery time"}
         </div>
         <div className="grid grid-cols-2 gap-2">
           <SlotButton

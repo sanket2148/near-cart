@@ -63,6 +63,8 @@ export type SellerOrder = {
   placedAt: number;
   status: SellerOrderStatus;
   partnerId?: string;
+  fulfillmentType: "delivery" | "pickup";
+  pickupOtp?: string;
 };
 
 export type DeliveryPartner = {
@@ -145,11 +147,23 @@ export async function claimShop(shopId: string, businessType: BusinessType): Pro
 const MIN = 60 * 1000;
 
 // ---- Status helpers ----
-export const ORDER_FLOW: SellerOrderStatus[] = [
+// Pickup orders skip partner_assigned/picked_up/out_for_delivery entirely —
+// the customer collects in person — so the "next status" progression is
+// shorter than the delivery flow. Mirrors the same branch server-side in
+// seller-data/backend.server.ts's advanceOrder (the DB-authoritative one;
+// these only drive the seller UI's button labeling).
+export const ORDER_FLOW_DELIVERY: SellerOrderStatus[] = [
   "accepted",
   "preparing",
   "ready",
   "out_for_delivery",
+  "delivered",
+];
+
+export const ORDER_FLOW_PICKUP: SellerOrderStatus[] = [
+  "accepted",
+  "preparing",
+  "ready",
   "delivered",
 ];
 
@@ -163,10 +177,26 @@ export const STATUS_LABEL: Record<SellerOrderStatus, string> = {
   rejected: "Rejected",
 };
 
-export function nextStatus(status: SellerOrderStatus): SellerOrderStatus | null {
-  const i = ORDER_FLOW.indexOf(status);
-  if (i === -1 || i === ORDER_FLOW.length - 1) return null;
-  return ORDER_FLOW[i + 1];
+export function nextStatus(
+  status: SellerOrderStatus,
+  fulfillmentType: "delivery" | "pickup" = "delivery",
+): SellerOrderStatus | null {
+  const flow = fulfillmentType === "pickup" ? ORDER_FLOW_PICKUP : ORDER_FLOW_DELIVERY;
+  const i = flow.indexOf(status);
+  if (i === -1 || i === flow.length - 1) return null;
+  return flow[i + 1];
+}
+
+/** `STATUS_LABEL` with the two labels that read wrong for a pickup order swapped out. */
+export function sellerStatusLabel(
+  status: SellerOrderStatus,
+  fulfillmentType: "delivery" | "pickup" = "delivery",
+): string {
+  if (fulfillmentType === "pickup") {
+    if (status === "ready") return "Ready for pickup";
+    if (status === "delivered") return "Picked up";
+  }
+  return STATUS_LABEL[status];
 }
 
 function isToday(ts: number): boolean {
