@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Plus, Trash2, Search, Pencil, Camera, Loader2, ScanBarcode } from "lucide-react";
+import { Plus, Trash2, Search, Pencil, Camera, Loader2, ScanBarcode, Info } from "lucide-react";
 import { useSeller } from "@/lib/seller";
 import { formatINR, type Product } from "@/lib/data";
 import { uploadProductImage, getCatalogProductByBarcode } from "@/lib/seller-data/api.functions";
@@ -21,7 +21,6 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
-import { VerificationLockGate } from "@/components/seller/VerificationLockGate";
 import { BarcodeScanner } from "@/components/seller/BarcodeScanner";
 
 export const Route = createFileRoute("/seller/products")({
@@ -29,7 +28,7 @@ export const Route = createFileRoute("/seller/products")({
 });
 
 function SellerProducts() {
-  const { products, toggleStock, removeProduct } = useSeller();
+  const { shop, products, toggleStock, removeProduct } = useSeller();
   const [query, setQuery] = useState("");
   // Set when a barcode scan during "Add product" matches something already
   // in this shop's own catalog — jumps straight to editing that product
@@ -40,105 +39,121 @@ function SellerProducts() {
   const filtered = products.filter((p) => p.name.toLowerCase().includes(query.toLowerCase()));
 
   return (
-    <VerificationLockGate>
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h1 className="text-xl font-extrabold">Products</h1>
+    <div className="space-y-4">
+      {/* Product management is deliberately NOT gated on verification — a
+          seller should be able to build a real catalog while the trust team
+          reviews their shop, so orders can start flowing the moment it's
+          approved. Customer-facing visibility (getShopProducts/searchProducts
+          in catalog/backend.server.ts) and order placement (isShopAcceptingOrders
+          in orders/backend.server.ts) independently stay gated — this banner
+          is purely informational. */}
+      {shop.verificationStatus !== "approved" && (
+        <div className="flex items-start gap-2 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+          <Info className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>
+            Your shop is still pending verification — customers can&apos;t see or order these
+            products yet, but everything you add here will be ready to go live the moment your
+            shop is approved.
+          </span>
+        </div>
+      )}
+
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-extrabold">Products</h1>
+        <ProductDialog
+          trigger={
+            <Button variant="hero" size="sm">
+              <Plus className="h-4 w-4" /> Add
+            </Button>
+          }
+          onDuplicateFound={setDuplicateTarget}
+        />
+        {duplicateTarget && (
           <ProductDialog
-            trigger={
-              <Button variant="hero" size="sm">
-                <Plus className="h-4 w-4" /> Add
-              </Button>
-            }
-            onDuplicateFound={setDuplicateTarget}
+            product={duplicateTarget}
+            open
+            onOpenChange={(next) => {
+              if (!next) setDuplicateTarget(null);
+            }}
           />
-          {duplicateTarget && (
-            <ProductDialog
-              product={duplicateTarget}
-              open
-              onOpenChange={(next) => {
-                if (!next) setDuplicateTarget(null);
-              }}
-            />
-          )}
-        </div>
-
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search your products"
-            className="pl-9"
-          />
-        </div>
-
-        {filtered.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground">
-            No products found.
-          </div>
-        ) : (
-          <ul className="space-y-2">
-            {filtered.map((p) => (
-              <li
-                key={p.id}
-                className="flex items-center gap-3 rounded-2xl border border-border bg-card p-3 shadow-card"
-              >
-                {p.imageUrl ? (
-                  <img
-                    src={p.imageUrl}
-                    alt={p.name}
-                    className="h-11 w-11 shrink-0 rounded-xl object-cover"
-                  />
-                ) : (
-                  <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-muted text-xl">
-                    {p.emoji}
-                  </span>
-                )}
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-bold">{p.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {formatINR(p.price)} · {p.unit} · {p.category}
-                  </p>
-                  <span
-                    className={cn(
-                      "mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-bold",
-                      p.inStock
-                        ? "bg-primary/10 text-primary"
-                        : "bg-destructive/10 text-destructive",
-                    )}
-                  >
-                    {p.inStock ? "In stock" : "Out of stock"}
-                  </span>
-                </div>
-                <div className="flex flex-col items-end gap-2">
-                  <Switch checked={p.inStock} onCheckedChange={() => toggleStock(p.id)} />
-                  <div className="flex gap-1">
-                    <ProductDialog
-                      product={p}
-                      trigger={
-                        <button className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted">
-                          <Pencil className="h-4 w-4" />
-                        </button>
-                      }
-                    />
-                    <button
-                      onClick={() => {
-                        removeProduct(p.id);
-                        toast("Product removed");
-                      }}
-                      className="rounded-lg p-1.5 text-destructive hover:bg-destructive/10"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                </div>
-              </li>
-            ))}
-          </ul>
         )}
       </div>
-    </VerificationLockGate>
+
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Search your products"
+          className="pl-9"
+        />
+      </div>
+
+      {filtered.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground">
+          No products found.
+        </div>
+      ) : (
+        <ul className="space-y-2">
+          {filtered.map((p) => (
+            <li
+              key={p.id}
+              className="flex items-center gap-3 rounded-2xl border border-border bg-card p-3 shadow-card"
+            >
+              {p.imageUrl ? (
+                <img
+                  src={p.imageUrl}
+                  alt={p.name}
+                  className="h-11 w-11 shrink-0 rounded-xl object-cover"
+                />
+              ) : (
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-muted text-xl">
+                  {p.emoji}
+                </span>
+              )}
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-bold">{p.name}</p>
+                <p className="text-xs text-muted-foreground">
+                  {formatINR(p.price)} · {p.unit} · {p.category}
+                </p>
+                <span
+                  className={cn(
+                    "mt-1 inline-block rounded-full px-2 py-0.5 text-[10px] font-bold",
+                    p.inStock
+                      ? "bg-primary/10 text-primary"
+                      : "bg-destructive/10 text-destructive",
+                  )}
+                >
+                  {p.inStock ? "In stock" : "Out of stock"}
+                </span>
+              </div>
+              <div className="flex flex-col items-end gap-2">
+                <Switch checked={p.inStock} onCheckedChange={() => toggleStock(p.id)} />
+                <div className="flex gap-1">
+                  <ProductDialog
+                    product={p}
+                    trigger={
+                      <button className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted">
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                    }
+                  />
+                  <button
+                    onClick={() => {
+                      removeProduct(p.id);
+                      toast("Product removed");
+                    }}
+                    className="rounded-lg p-1.5 text-destructive hover:bg-destructive/10"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 
