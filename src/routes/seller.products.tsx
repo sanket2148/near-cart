@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { Plus, Trash2, Search, Pencil, Camera, Loader2, ScanBarcode } from "lucide-react";
 import { useSeller } from "@/lib/seller";
 import { formatINR, type Product } from "@/lib/data";
-import { uploadProductImage } from "@/lib/seller-data/api.functions";
+import { uploadProductImage, getCatalogProductByBarcode } from "@/lib/seller-data/api.functions";
 import { lookupBarcode } from "@/lib/barcode/api.functions";
 import { fileToBase64 } from "@/lib/verification";
 import { Button } from "@/components/ui/button";
@@ -195,6 +195,22 @@ function ProductDialog({
       return;
     }
     set("barcode", code);
+
+    // Check NearCart's own catalog first (another shop may have already
+    // scanned this exact barcode) — no external call, and covers barcodes
+    // Open Food Facts has no record of (this shop's own past manual entry).
+    try {
+      const catalogHit = await getCatalogProductByBarcode({ data: { barcode: code } });
+      if (catalogHit) {
+        setForm((f) => ({ ...f, name: f.name.trim() ? f.name : catalogHit.name }));
+        toast.success(`Found in catalog: ${catalogHit.name}`);
+        return;
+      }
+    } catch {
+      // Catalog lookup failing shouldn't block falling through to Open Food
+      // Facts — worst case the merchant just fills the form in manually.
+    }
+
     try {
       const result = await lookupBarcode({ data: { barcode: code } });
       if (result) {

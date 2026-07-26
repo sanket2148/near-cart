@@ -245,7 +245,19 @@ export function SellerProvider({ children }: { children: ReactNode }) {
   // Verification wizard progress is still localStorage (see file header).
   const [verification, setVerification] = useState<ShopVerification | null>(null);
   useEffect(() => {
-    if (shop) setVerification(loadVerification(shop.id));
+    if (!shop) return;
+    const loaded = loadVerification(shop.id);
+    // Reconcile against the real DB status: an admin approval doesn't touch
+    // this browser's localStorage unless it happened on the same device, so
+    // without this the wizard can be stuck showing L7/L8 as pending forever
+    // even though shop.verificationStatus (real) already says "approved".
+    if (shop.verificationStatus === "approved" && loaded.overallStatus !== "approved") {
+      loaded.overallStatus = "approved";
+      loaded.currentBadge = shop.badgeTier;
+      loaded.levels.l7_review.status = "verified";
+      saveVerification(loaded);
+    }
+    setVerification(loaded);
   }, [shop]);
 
   const invalidateShop = () => queryClient.invalidateQueries({ queryKey: ["my-shop", userId] });

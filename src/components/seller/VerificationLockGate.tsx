@@ -11,8 +11,12 @@ type Props = {
 };
 
 export function VerificationLockGate({ children }: Props) {
-  const { verification } = useSeller();
-  const isApproved = verification.overallStatus === "approved";
+  const { shop, verification } = useSeller();
+  // Gate on the real DB-backed status (shop_verifications.overall_status via
+  // getMyShop), not the localStorage wizard's overallStatus — the wizard
+  // object only updates from this browser's own actions and never learns
+  // about an admin approval that happened elsewhere (see seller.tsx).
+  const isApproved = shop.verificationStatus === "approved";
 
   if (isApproved) {
     return <>{children}</>;
