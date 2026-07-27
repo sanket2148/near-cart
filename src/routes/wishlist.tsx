@@ -47,7 +47,7 @@ function WishlistPage() {
 
   if (!user) {
     return (
-      <AppShell>
+      <AppShell hideNav>
         <h1 className="text-xl font-extrabold">Wishlist</h1>
         <p className="mt-1 text-sm text-muted-foreground">Log in to save products for later.</p>
         <div className="mt-4">

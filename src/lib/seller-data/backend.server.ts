@@ -52,11 +52,14 @@ async function assertShopOwner(shopId: string, callerId: string): Promise<void> 
   if (!data || data.owner_id !== callerId) throw new OwnershipError("This isn't your shop.");
 }
 
-/** Returns the owning shop's id once ownership is confirmed — callers that need it (e.g. addProduct) can reuse it without a second query. */
-async function assertProductOwner(productId: string, callerId: string): Promise<string> {
+/** Returns the owning shop id + current name once ownership is confirmed — callers that need either (e.g. updateProduct's catalog link) can reuse it without a second query. */
+async function assertProductOwner(
+  productId: string,
+  callerId: string,
+): Promise<{ shopId: string; name: string }> {
   const { data, error } = await admin()
     .from("products")
-    .select("shop_id, shops(owner_id)")
+    .select("shop_id, name, shops(owner_id)")
     .eq("id", productId)
     .maybeSingle();
   if (error) throw new Error(`Ownership check failed: ${error.message}`);
@@ -64,7 +67,7 @@ async function assertProductOwner(productId: string, callerId: string): Promise<
   const row = data as any;
   const ownerId = Array.isArray(row?.shops) ? row.shops[0]?.owner_id : row?.shops?.owner_id;
   if (!row || ownerId !== callerId) throw new OwnershipError("This isn't your product.");
-  return row.shop_id as string;
+  return { shopId: row.shop_id as string, name: row.name as string };
 }
 
 async function assertOrderOwner(orderId: string, callerId: string): Promise<void> {
@@ -446,6 +449,57 @@ export async function syncVerificationSummary(
   if (error) throw new Error(`syncVerificationSummary failed: ${error.message}`);
 }
 
+// ─── Catalog products (migration 0016) ─────────────────────────────────────
+// Links barcode-identified products across different shops to one shared
+// canonical record, so scanning a barcode another shop already has doesn't
+// need a fresh Open Food Facts lookup and two shops selling the same real
+// item aren't storing/maintaining fully independent name/description copies.
+// Deliberately barcode-only — no fuzzy name matching (see migration comment).
+
+/** Finds or creates the catalog_products row for a barcode, returning its id. */
+async function getOrCreateCatalogProduct(barcode: string, name: string): Promise<string> {
+  const { data: existing, error: selErr } = await admin()
+    .from("catalog_products")
+    .select("id")
+    .eq("barcode", barcode)
+    .maybeSingle();
+  if (selErr) throw new Error(`getOrCreateCatalogProduct lookup failed: ${selErr.message}`);
+  if (existing) return existing.id;
+
+  const { data: created, error: insErr } = await admin()
+    .from("catalog_products")
+    .insert({ barcode, name })
+    .select("id")
+    .single();
+  if (insErr) {
+    // 23505 = another shop linked this exact barcode in the gap between our
+    // select and insert — just use the row that won the race.
+    if (insErr.code === "23505") {
+      const { data: race, error: raceErr } = await admin()
+        .from("catalog_products")
+        .select("id")
+        .eq("barcode", barcode)
+        .single();
+      if (raceErr)
+        throw new Error(`getOrCreateCatalogProduct race lookup failed: ${raceErr.message}`);
+      return race.id;
+    }
+    throw new Error(`getOrCreateCatalogProduct insert failed: ${insErr.message}`);
+  }
+  return created.id;
+}
+
+/** Fast local lookup checked before the external Open Food Facts call — covers barcodes any shop (food or not) already scanned. */
+export async function getCatalogProductByBarcode(barcode: string): Promise<{ name: string } | null> {
+  const { data, error } = await admin()
+    .from("catalog_products")
+    .select("name")
+    .eq("barcode", barcode)
+    .maybeSingle();
+  if (error) throw new Error(`getCatalogProductByBarcode failed: ${error.message}`);
+  return data ? { name: data.name } : null;
+}
+
 // ─── Products ────────────────────────────────────────────────────────────────
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -482,6 +536,9 @@ export async function addProduct(
   input: Omit<Product, "id" | "shopId">,
 ): Promise<Product> {
   await assertShopOwner(shopId, callerId);
+  const catalogProductId = input.barcode
+    ? await getOrCreateCatalogProduct(input.barcode, input.name)
+    : null;
   const { data, error } = await admin()
     .from("products")
     .insert({
@@ -494,6 +551,7 @@ export async function addProduct(
       menu_section: input.category,
       in_stock: input.inStock,
       barcode: input.barcode || null,
+      catalog_product_id: catalogProductId,
     })
     .select("*")
     .single();
@@ -515,7 +573,7 @@ export async function updateProduct(
   callerId: string,
   patch: Partial<Product>,
 ): Promise<void> {
-  await assertProductOwner(productId, callerId);
+  const current = await assertProductOwner(productId, callerId);
   const row: Record<string, unknown> = {};
   if (patch.name !== undefined) row.name = patch.name;
   if (patch.emoji !== undefined) row.emoji = patch.emoji;
@@ -525,7 +583,12 @@ export async function updateProduct(
   if (patch.unit !== undefined) row.unit = patch.unit;
   if (patch.category !== undefined) row.menu_section = patch.category;
   if (patch.inStock !== undefined) row.in_stock = patch.inStock;
-  if (patch.barcode !== undefined) row.barcode = patch.barcode || null;
+  if (patch.barcode !== undefined) {
+    row.barcode = patch.barcode || null;
+    row.catalog_product_id = patch.barcode
+      ? await getOrCreateCatalogProduct(patch.barcode, patch.name ?? current.name)
+      : null;
+  }
   if (Object.keys(row).length === 0) return;
 
   const { error } = await admin().from("products").update(row).eq("id", productId);
@@ -582,6 +645,9 @@ export type SellerOrder = {
   placedAt: number;
   status: SellerOrderStatus;
   partnerId?: string;
+  fulfillmentType: "delivery" | "pickup";
+  /** Shop→customer handoff code for a pickup order — undefined for delivery orders. */
+  pickupOtp?: string;
 };
 
 function toSellerStatus(dbStatus: string): SellerOrderStatus {
@@ -650,6 +716,8 @@ function mapSellerOrderRow(row: any): SellerOrder {
     placedAt: new Date(row.placed_at).getTime(),
     status: toSellerStatus(row.status),
     partnerId: activeAssignment?.partner_id,
+    fulfillmentType: row.fulfillment_type === "pickup" ? "pickup" : "delivery",
+    pickupOtp: row.fulfillment_type === "pickup" ? (row.pickup_otp ?? undefined) : undefined,
   };
 }
 
@@ -664,35 +732,56 @@ export async function getShopOrders(shopId: string, callerId: string): Promise<S
   return (data ?? []).map(mapSellerOrderRow);
 }
 
-const CUSTOMER_NOTIFICATION: Record<string, { title: string; body: (shopName: string) => string }> =
-  {
-    shop_accepted: { title: "Order accepted", body: (shop) => `${shop} accepted your order.` },
-    shop_rejected: {
-      title: "Order rejected",
-      body: (shop) => `${shop} couldn't accept your order.`,
-    },
-    preparing: {
-      title: "Order being prepared",
-      body: (shop) => `${shop} is preparing your order.`,
-    },
-    ready_for_pickup: {
-      title: "Order ready",
-      body: (shop) => `Your order from ${shop} is ready and waiting for pickup.`,
-    },
-    out_for_delivery: {
-      title: "Out for delivery",
-      body: (shop) => `Your order from ${shop} is on its way.`,
-    },
-    delivered: {
-      title: "Order delivered",
-      body: (shop) => `Your order from ${shop} has been delivered. Enjoy!`,
-    },
-  };
+// `title`/`body` take the fulfillment type too — most entries ignore it (the
+// wording already reads fine either way), but "delivered" genuinely needs to
+// say something different for a pickup order the customer just walked in and
+// collected themselves versus one a partner actually delivered.
+const CUSTOMER_NOTIFICATION: Record<
+  string,
+  { title: (f: "delivery" | "pickup") => string; body: (shop: string, f: "delivery" | "pickup") => string }
+> = {
+  shop_accepted: {
+    title: () => "Order accepted",
+    body: (shop) => `${shop} accepted your order.`,
+  },
+  shop_rejected: {
+    title: () => "Order rejected",
+    body: (shop) => `${shop} couldn't accept your order.`,
+  },
+  preparing: {
+    title: () => "Order being prepared",
+    body: (shop) => `${shop} is preparing your order.`,
+  },
+  ready_for_pickup: {
+    title: () => "Order ready",
+    body: (shop) => `Your order from ${shop} is ready and waiting for pickup.`,
+  },
+  out_for_delivery: {
+    title: () => "Out for delivery",
+    body: (shop) => `Your order from ${shop} is on its way.`,
+  },
+  delivered: {
+    title: (f) => (f === "pickup" ? "Order picked up" : "Order delivered"),
+    body: (shop, f) =>
+      f === "pickup"
+        ? `You've picked up your order from ${shop}. Enjoy!`
+        : `Your order from ${shop} has been delivered. Enjoy!`,
+  },
+};
 
-async function requireCurrentStatus(orderId: string): Promise<string> {
-  const { data, error } = await admin().from("orders").select("status").eq("id", orderId).single();
+async function requireOrderState(
+  orderId: string,
+): Promise<{ status: string; fulfillmentType: "delivery" | "pickup" }> {
+  const { data, error } = await admin()
+    .from("orders")
+    .select("status, fulfillment_type")
+    .eq("id", orderId)
+    .single();
   if (error) throw new Error(`Could not read order status: ${error.message}`);
-  return data.status;
+  return {
+    status: data.status,
+    fulfillmentType: data.fulfillment_type === "pickup" ? "pickup" : "delivery",
+  };
 }
 
 /**
@@ -714,7 +803,7 @@ async function setOrderStatus(
 ): Promise<void> {
   const { data: shopInfo } = await admin()
     .from("orders")
-    .select("customer_id, shops(name)")
+    .select("customer_id, fulfillment_type, shops(name)")
     .eq("id", orderId)
     .single();
 
@@ -737,12 +826,14 @@ async function setOrderStatus(
   const notif = CUSTOMER_NOTIFICATION[toDbStatus];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const shopName = (shopInfo as any)?.shops?.name ?? "The shop";
+  const fulfillmentType: "delivery" | "pickup" =
+    shopInfo?.fulfillment_type === "pickup" ? "pickup" : "delivery";
   if (notif && shopInfo?.customer_id) {
     await insertNotification(
       shopInfo.customer_id,
       "order_status",
-      notif.title,
-      notif.body(shopName),
+      notif.title(fulfillmentType),
+      notif.body(shopName, fulfillmentType),
       {
         orderId,
         status: toDbStatus,
@@ -758,7 +849,7 @@ const SELLER_ACTIONABLE_DB_STATUSES = new Set(["created", "paid", "cod_confirmed
 
 export async function acceptOrder(orderId: string, callerId: string): Promise<void> {
   await assertOrderOwner(orderId, callerId);
-  const dbStatus = await requireCurrentStatus(orderId);
+  const { status: dbStatus } = await requireOrderState(orderId);
   if (!SELLER_ACTIONABLE_DB_STATUSES.has(dbStatus)) {
     throw new Error("This order has already been actioned — refresh to see its current status.");
   }
@@ -767,7 +858,7 @@ export async function acceptOrder(orderId: string, callerId: string): Promise<vo
 
 export async function rejectOrder(orderId: string, callerId: string): Promise<void> {
   await assertOrderOwner(orderId, callerId);
-  const dbStatus = await requireCurrentStatus(orderId);
+  const { status: dbStatus } = await requireOrderState(orderId);
   if (!SELLER_ACTIONABLE_DB_STATUSES.has(dbStatus)) {
     throw new Error("This order has already been actioned — refresh to see its current status.");
   }
@@ -796,16 +887,16 @@ export async function rejectOrder(orderId: string, callerId: string): Promise<vo
  */
 export async function advanceOrder(orderId: string, callerId: string): Promise<void> {
   await assertOrderOwner(orderId, callerId);
-  const dbStatus = await requireCurrentStatus(orderId);
+  const { status: dbStatus, fulfillmentType } = await requireOrderState(orderId);
   const currentStatus = toSellerStatus(dbStatus);
 
-  const flow: Exclude<SellerOrderStatus, "new" | "rejected">[] = [
-    "accepted",
-    "preparing",
-    "ready",
-    "out_for_delivery",
-    "delivered",
-  ];
+  // Pickup orders skip partner_assigned/picked_up/out_for_delivery entirely
+  // — the customer collects in person, so "ready" advances straight to the
+  // existing terminal "delivered" (the UI relabels it "Picked up").
+  const flow: Exclude<SellerOrderStatus, "new" | "rejected">[] =
+    fulfillmentType === "pickup"
+      ? ["accepted", "preparing", "ready", "delivered"]
+      : ["accepted", "preparing", "ready", "out_for_delivery", "delivered"];
   if (currentStatus === "new" || currentStatus === "rejected") return; // nothing to advance
   const next = flow[flow.indexOf(currentStatus) + 1];
   if (!next) return;
@@ -877,6 +968,14 @@ export async function offerToPartner(
   partnerId: string,
 ): Promise<void> {
   await assertOrderOwner(orderId, callerId);
+  // Defense-in-depth, not the only guard — the seller UI never renders a
+  // partner-assignment control for a pickup order, but this file's
+  // convention elsewhere is to not rely on the client alone (see the
+  // authorization-hardening notes throughout this module).
+  const { fulfillmentType } = await requireOrderState(orderId);
+  if (fulfillmentType === "pickup") {
+    throw new Error("This is a self-pickup order — no delivery partner needed.");
+  }
   const { data: existing, error: existingErr } = await admin()
     .from("assignments")
     .select("id")

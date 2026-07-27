@@ -309,6 +309,25 @@ export async function getShop(shopId: string): Promise<CatalogShop | null> {
 }
 
 export async function getShopProducts(shopId: string): Promise<CatalogProduct[]> {
+  // getShop above deliberately stays ungated so a direct link resolves to a
+  // real page — but the products themselves must not leak pre-verification.
+  // A seller can build a real catalog while their shop is pending review
+  // (2026-07-27) specifically so it's ready the moment approval lands; until
+  // then this must return the same empty state as a shop with no products
+  // at all, not the real (possibly populated) catalog.
+  const { data: shop, error: shopErr } = await admin()
+    .from("shops")
+    .select("claimed, shop_verifications(overall_status)")
+    .eq("id", shopId)
+    .maybeSingle();
+  if (shopErr) throw new Error(`getShopProducts failed: ${shopErr.message}`);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const shopRow = shop as any;
+  const verification = Array.isArray(shopRow?.shop_verifications)
+    ? shopRow.shop_verifications[0]
+    : shopRow?.shop_verifications;
+  if (!shopRow?.claimed || verification?.overall_status !== "approved") return [];
+
   const { data, error } = await admin().from("products").select("*").eq("shop_id", shopId);
   if (error) throw new Error(`getShopProducts failed: ${error.message}`);
   return (data ?? []).map(mapProductRow);
@@ -329,10 +348,18 @@ export async function searchShops(query: string): Promise<CatalogShop[]> {
   return (data ?? []).map((row) => mapShopRow(row));
 }
 
+// Same claimed+verified gate as searchShops — otherwise a customer could
+// find an unverified shop's products by name even though the shop itself is
+// excluded from browse/search. `shops!inner`/`shop_verifications!inner` are
+// required (not just `shops(...)`) for the same reason SHOP_SELECT_VERIFIED_ONLY
+// needs `!inner` above: PostgREST only drops a parent row for a filter on an
+// embedded column when the embed is an inner join.
 export async function searchProducts(query: string): Promise<CatalogProduct[]> {
   const { data, error } = await admin()
     .from("products")
-    .select("*, shops(name)")
+    .select("*, shops!inner(name, claimed, shop_verifications!inner(overall_status))")
+    .eq("shops.claimed", true)
+    .eq("shops.shop_verifications.overall_status", "approved")
     .ilike("name", `%${query}%`)
     .limit(30);
   if (error) throw new Error(`searchProducts failed: ${error.message}`);

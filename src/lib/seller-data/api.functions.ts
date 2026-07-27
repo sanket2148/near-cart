@@ -131,6 +131,14 @@ export const syncVerificationSummary = createServerFn({ method: "POST" })
     return be.syncVerificationSummary(data.shopId, context.uid, data.summary as any);
   });
 
+export const getCatalogProductByBarcode = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .inputValidator(z.object({ barcode: z.string().min(1) }))
+  .handler(async ({ data }) => {
+    const be = await import("./backend.server");
+    return be.getCatalogProductByBarcode(data.barcode);
+  });
+
 export const getMyProducts = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
   .inputValidator(z.object({ shopId: z.string().min(1) }))

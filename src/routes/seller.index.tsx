@@ -8,7 +8,7 @@ import {
   Bell,
   TrendingUp,
 } from "lucide-react";
-import { useSeller, STATUS_LABEL, timeAgo } from "@/lib/seller";
+import { useSeller, sellerStatusLabel, timeAgo } from "@/lib/seller";
 import { formatINR } from "@/lib/data";
 import { Button } from "@/components/ui/button";
 import { VerificationStatusCard } from "@/components/seller/VerificationStatusCard";
@@ -129,10 +129,12 @@ function SellerDashboard() {
               >
                 <span className="min-w-0">
                   <span className="block truncate text-sm font-bold">#{o.id.slice(-5)} · {o.customerName}</span>
-                  <span className="text-xs text-muted-foreground">{STATUS_LABEL[o.status]}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {sellerStatusLabel(o.status, o.fulfillmentType)}
+                  </span>
                 </span>
                 <span className="rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-bold text-primary">
-                  {STATUS_LABEL[o.status]}
+                  {sellerStatusLabel(o.status, o.fulfillmentType)}
                 </span>
               </li>
             ))}

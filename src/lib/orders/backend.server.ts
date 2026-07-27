@@ -71,6 +71,9 @@ export type CustomerOrder = {
     currency: string;
     keyId: string;
   };
+  fulfillmentType: "delivery" | "pickup";
+  /** Shop→customer handoff code — only set for `fulfillmentType: "pickup"`. */
+  pickupCode?: string;
 };
 
 const HANDLING_AMOUNT = 900; // paise — matches the flat ₹9 handling charge already shown in checkout.tsx
@@ -241,11 +244,16 @@ export async function quoteOrder(input: {
   shopId: string;
   items: OrderItemInput[];
   couponCode?: string;
+  fulfillmentType?: "delivery" | "pickup";
 }): Promise<OrderQuote> {
   const shop = await getShopRow(input.shopId);
   const { itemsAmount } = await priceItems(input.shopId, input.items);
   const deliveryAmount =
-    itemsAmount >= shop.free_delivery_above_amount ? 0 : shop.delivery_fee_amount;
+    input.fulfillmentType === "pickup"
+      ? 0
+      : itemsAmount >= shop.free_delivery_above_amount
+        ? 0
+        : shop.delivery_fee_amount;
   const { discountAmount, couponError } = await applyCoupon(input.couponCode, itemsAmount);
   return {
     itemsAmount,
@@ -264,9 +272,11 @@ export type PlaceOrderInput = {
   shopId: string;
   items: OrderItemInput[];
   paymentMethod: "upi" | "card" | "netbanking" | "cod";
-  addressText: string;
-  lat: number;
-  lng: number;
+  fulfillmentType: "delivery" | "pickup";
+  /** Required when `fulfillmentType` is `"delivery"` — validated below, not just by the caller's form. */
+  addressText?: string;
+  lat?: number;
+  lng?: number;
   /** Only a code is accepted — the discount amount is always recomputed here, never trusted from the client. */
   couponCode?: string;
   /**
@@ -322,27 +332,41 @@ export async function placeOrder(input: PlaceOrderInput): Promise<CustomerOrder>
   if (!isShopAcceptingOrders(shop)) {
     throw new Error("This shop isn't accepting orders yet.");
   }
+  if (input.fulfillmentType === "delivery" && !input.addressText?.trim()) {
+    // The server function is the real trust boundary, not the checkout
+    // form — even though today's only caller always sends this for
+    // delivery orders, that shouldn't be assumed unenforced here.
+    throw new Error("A delivery address is required.");
+  }
   const { lines, itemsAmount } = await priceItems(input.shopId, input.items);
   const deliveryAmount =
-    itemsAmount >= shop.free_delivery_above_amount ? 0 : shop.delivery_fee_amount;
+    input.fulfillmentType === "pickup"
+      ? 0
+      : itemsAmount >= shop.free_delivery_above_amount
+        ? 0
+        : shop.delivery_fee_amount;
   const { discountAmount, couponError } = await applyCoupon(input.couponCode, itemsAmount);
   if (input.couponCode && couponError) throw new Error(couponError);
   const totalAmount = Math.max(0, itemsAmount + deliveryAmount + HANDLING_AMOUNT - discountAmount);
 
-  const { data: address, error: addrErr } = await admin()
-    .from("addresses")
-    .insert({
-      user_id: input.customerId,
-      label: "Delivery",
-      line1: input.addressText,
-      city: shop.city,
-      pincode: shop.pincode,
-      lat: input.lat,
-      lng: input.lng,
-    })
-    .select("id")
-    .single();
-  if (addrErr) throw new Error(`placeOrder address failed: ${addrErr.message}`);
+  let addressId: string | null = null;
+  if (input.fulfillmentType === "delivery") {
+    const { data: address, error: addrErr } = await admin()
+      .from("addresses")
+      .insert({
+        user_id: input.customerId,
+        label: "Delivery",
+        line1: input.addressText,
+        city: shop.city,
+        pincode: shop.pincode,
+        lat: input.lat,
+        lng: input.lng,
+      })
+      .select("id")
+      .single();
+    if (addrErr) throw new Error(`placeOrder address failed: ${addrErr.message}`);
+    addressId = address.id;
+  }
 
   // Phase F: COD is always confirmed on the spot. For everything else, use
   // a real Razorpay payment if one is configured (RAZORPAY_KEY_ID/
@@ -356,9 +380,12 @@ export async function placeOrder(input: PlaceOrderInput): Promise<CustomerOrder>
   const status =
     input.paymentMethod === "cod" ? "cod_confirmed" : gatewayConfigured ? "created" : "paid";
 
-  // 4-digit handoff codes: shop→partner at pickup, partner→customer at delivery
-  // (Phase E). Generated up front so they exist regardless of when a partner
-  // ends up assigned.
+  // 4-digit handoff codes. For a delivery order: shop→partner at pickup,
+  // partner→customer at delivery (Phase E) — generated up front so they
+  // exist regardless of when a partner ends up assigned. For a pickup order,
+  // `pickup_otp` is dual-purposed as the shop→customer handoff code instead
+  // (no partner is ever involved, so `delivery_otp` just goes unused) — see
+  // migration 0017_pickup_orders.sql.
   const pickupOtp = String(Math.floor(1000 + Math.random() * 9000));
   const deliveryOtp = String(Math.floor(1000 + Math.random() * 9000));
 
@@ -367,9 +394,10 @@ export async function placeOrder(input: PlaceOrderInput): Promise<CustomerOrder>
     .insert({
       customer_id: input.customerId,
       shop_id: input.shopId,
-      address_id: address.id,
+      address_id: addressId,
       status,
       payment_method: input.paymentMethod,
+      fulfillment_type: input.fulfillmentType,
       items_amount: itemsAmount,
       delivery_amount: deliveryAmount,
       discount_amount: discountAmount,
@@ -435,11 +463,13 @@ export async function placeOrder(input: PlaceOrderInput): Promise<CustomerOrder>
     handling: HANDLING_AMOUNT / 100,
     total: totalAmount / 100,
     paymentMethod: input.paymentMethod,
-    address: input.addressText,
+    address: input.fulfillmentType === "pickup" ? "" : (input.addressText ?? ""),
     etaMinutes: shop.eta_minutes,
     placedAt: new Date(order.placed_at).getTime(),
     status: toUiStatus(order.status),
     payment,
+    fulfillmentType: input.fulfillmentType,
+    pickupCode: input.fulfillmentType === "pickup" ? pickupOtp : undefined,
   };
 }
 
@@ -475,6 +505,8 @@ function mapOrderRow(row: any): CustomerOrder {
     etaMinutes: shop?.eta_minutes ?? 30,
     placedAt: new Date(row.placed_at).getTime(),
     status: toUiStatus(row.status),
+    fulfillmentType: row.fulfillment_type === "pickup" ? "pickup" : "delivery",
+    pickupCode: row.fulfillment_type === "pickup" ? (row.pickup_otp ?? undefined) : undefined,
   };
 }
 

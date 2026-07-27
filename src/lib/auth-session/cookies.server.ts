@@ -13,6 +13,13 @@
 import { getRequestHeader, setResponseHeader } from "@tanstack/react-start/server";
 import type { Session } from "@supabase/supabase-js";
 
+/** The only fields this file actually needs off a Session — narrower than the
+ * real type (which also requires a full `user: User`) so callers that only
+ * have the token trio (e.g. completeOAuthSession, reconstructing a session
+ * from a client-exchanged OAuth code) don't need to fabricate one. A real
+ * `Session` object already satisfies this structurally. */
+export type SessionTokens = Pick<Session, "access_token" | "refresh_token" | "expires_in">;
+
 export const ACCESS_COOKIE = "__Host-nc-at";
 export const REFRESH_COOKIE = "__Host-nc-rt";
 const THIRTY_DAYS = 60 * 60 * 24 * 30;
@@ -27,7 +34,7 @@ function clearCookieHeader(name: string): string {
   return `${name}=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0`;
 }
 
-export function setSessionCookies(session: Session): void {
+export function setSessionCookies(session: SessionTokens): void {
   setResponseHeader("set-cookie", [
     cookieHeader(ACCESS_COOKIE, session.access_token, session.expires_in),
     cookieHeader(REFRESH_COOKIE, session.refresh_token, THIRTY_DAYS),

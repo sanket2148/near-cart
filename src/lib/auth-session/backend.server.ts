@@ -97,6 +97,24 @@ export async function getUserForToken(
   return { id: data.user.id, email: data.user.email };
 }
 
+/**
+ * Completes a Google (or any future OAuth provider) sign-in. The PKCE code
+ * exchange itself has to happen client-side (the code_verifier Supabase-js
+ * stashed when signInWithOAuth() was called lives in that same browser), so
+ * by the time this runs the client already holds a real Supabase session —
+ * this function's only job is verifying that session is genuine before
+ * trusting it, never accepting the tokens at face value just because a
+ * client sent them (same "derive, don't trust" principle every other real
+ * identity input in this codebase follows). Real verification: re-checking
+ * the access token against Supabase itself (getUserForToken), not just
+ * decoding the JWT locally.
+ */
+export async function verifyOAuthSession(accessToken: string): Promise<{ id: string; email: string }> {
+  const user = await getUserForToken(accessToken);
+  if (!user) throw new Error("Invalid or expired session — please try signing in again.");
+  return user;
+}
+
 let _admin: SupabaseClient | null = null;
 
 function admin(): SupabaseClient | null {

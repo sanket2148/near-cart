@@ -75,7 +75,7 @@ function NotificationsPage() {
 
   if (!user) {
     return (
-      <AppShell>
+      <AppShell hideNav>
         <h1 className="text-xl font-extrabold">Notifications</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Log in to see updates about your orders.

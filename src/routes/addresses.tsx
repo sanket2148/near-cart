@@ -195,7 +195,7 @@ function AddressesPage() {
 
   if (!user) {
     return (
-      <AppShell>
+      <AppShell hideNav>
         <h1 className="text-xl font-extrabold">Saved Addresses</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Log in to manage your delivery addresses.

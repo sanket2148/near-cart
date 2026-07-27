@@ -42,6 +42,7 @@ import { Route as PartnerProfileRouteImport } from './routes/partner.profile'
 import { Route as PartnerEarningsRouteImport } from './routes/partner.earnings'
 import { Route as PartnerDeliveriesRouteImport } from './routes/partner.deliveries'
 import { Route as OrderOrderIdRouteImport } from './routes/order.$orderId'
+import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as ApiDocsOpenapiDotjsonRouteImport } from './routes/api-docs.openapi[.]json'
 import { Route as AdminVerificationRouteImport } from './routes/admin.verification'
 import { Route as AdminShopsRouteImport } from './routes/admin.shops'
@@ -217,6 +218,11 @@ const OrderOrderIdRoute = OrderOrderIdRouteImport.update({
   path: '/order/$orderId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthCallbackRoute = AuthCallbackRouteImport.update({
+  id: '/auth/callback',
+  path: '/auth/callback',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiDocsOpenapiDotjsonRoute = ApiDocsOpenapiDotjsonRouteImport.update({
   id: '/openapi.json',
   path: '/openapi.json',
@@ -289,6 +295,7 @@ export interface FileRoutesByFullPath {
   '/admin/shops': typeof AdminShopsRoute
   '/admin/verification': typeof AdminVerificationRoute
   '/api-docs/openapi.json': typeof ApiDocsOpenapiDotjsonRoute
+  '/auth/callback': typeof AuthCallbackRoute
   '/order/$orderId': typeof OrderOrderIdRoute
   '/partner/deliveries': typeof PartnerDeliveriesRoute
   '/partner/earnings': typeof PartnerEarningsRoute
@@ -330,6 +337,7 @@ export interface FileRoutesByTo {
   '/admin/shops': typeof AdminShopsRoute
   '/admin/verification': typeof AdminVerificationRoute
   '/api-docs/openapi.json': typeof ApiDocsOpenapiDotjsonRoute
+  '/auth/callback': typeof AuthCallbackRoute
   '/order/$orderId': typeof OrderOrderIdRoute
   '/partner/deliveries': typeof PartnerDeliveriesRoute
   '/partner/earnings': typeof PartnerEarningsRoute
@@ -375,6 +383,7 @@ export interface FileRoutesById {
   '/admin/shops': typeof AdminShopsRoute
   '/admin/verification': typeof AdminVerificationRoute
   '/api-docs/openapi.json': typeof ApiDocsOpenapiDotjsonRoute
+  '/auth/callback': typeof AuthCallbackRoute
   '/order/$orderId': typeof OrderOrderIdRoute
   '/partner/deliveries': typeof PartnerDeliveriesRoute
   '/partner/earnings': typeof PartnerEarningsRoute
@@ -421,6 +430,7 @@ export interface FileRouteTypes {
     | '/admin/shops'
     | '/admin/verification'
     | '/api-docs/openapi.json'
+    | '/auth/callback'
     | '/order/$orderId'
     | '/partner/deliveries'
     | '/partner/earnings'
@@ -462,6 +472,7 @@ export interface FileRouteTypes {
     | '/admin/shops'
     | '/admin/verification'
     | '/api-docs/openapi.json'
+    | '/auth/callback'
     | '/order/$orderId'
     | '/partner/deliveries'
     | '/partner/earnings'
@@ -506,6 +517,7 @@ export interface FileRouteTypes {
     | '/admin/shops'
     | '/admin/verification'
     | '/api-docs/openapi.json'
+    | '/auth/callback'
     | '/order/$orderId'
     | '/partner/deliveries'
     | '/partner/earnings'
@@ -546,6 +558,7 @@ export interface RootRouteChildren {
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   StatusRoute: typeof StatusRoute
   WishlistRoute: typeof WishlistRoute
+  AuthCallbackRoute: typeof AuthCallbackRoute
   OrderOrderIdRoute: typeof OrderOrderIdRoute
   ShopShopIdRoute: typeof ShopShopIdRoute
   ApiWebhooksRazorpayRoute: typeof ApiWebhooksRazorpayRoute
@@ -785,6 +798,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OrderOrderIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/auth/callback': {
+      id: '/auth/callback'
+      path: '/auth/callback'
+      fullPath: '/auth/callback'
+      preLoaderRoute: typeof AuthCallbackRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api-docs/openapi.json': {
       id: '/api-docs/openapi.json'
       path: '/openapi.json'
@@ -943,6 +963,7 @@ const rootRouteChildren: RootRouteChildren = {
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   StatusRoute: StatusRoute,
   WishlistRoute: WishlistRoute,
+  AuthCallbackRoute: AuthCallbackRoute,
   OrderOrderIdRoute: OrderOrderIdRoute,
   ShopShopIdRoute: ShopShopIdRoute,
   ApiWebhooksRazorpayRoute: ApiWebhooksRazorpayRoute,

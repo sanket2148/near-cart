@@ -82,7 +82,7 @@ function SettingsPage() {
 
   if (!user) {
     return (
-      <AppShell>
+      <AppShell hideNav>
         <h1 className="text-xl font-extrabold">Settings</h1>
         <p className="mt-1 text-sm text-muted-foreground">Log in to manage your account.</p>
         <div className="mt-4">

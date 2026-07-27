@@ -13,6 +13,7 @@ export const quoteOrder = createServerFn({ method: "GET" })
       shopId: z.string().min(1),
       items: z.array(OrderItemSchema),
       couponCode: z.string().min(1).optional(),
+      fulfillmentType: z.enum(["delivery", "pickup"]).optional(),
     }),
   )
   .handler(async ({ data }) => {
@@ -31,9 +32,13 @@ export const placeOrder = createServerFn({ method: "POST" })
       shopId: z.string().min(1),
       items: z.array(OrderItemSchema).min(1),
       paymentMethod: z.enum(["upi", "card", "netbanking", "cod"]),
-      addressText: z.string().min(1),
-      lat: z.number(),
-      lng: z.number(),
+      fulfillmentType: z.enum(["delivery", "pickup"]).default("delivery"),
+      // Required for delivery orders — enforced in backend.server.ts, not
+      // here; this validator is shape-only, the server function is the real
+      // trust boundary (same convention as everything else in this file).
+      addressText: z.string().min(1).optional(),
+      lat: z.number().optional(),
+      lng: z.number().optional(),
       couponCode: z.string().min(1).optional(),
       // Client-generated once per checkout attempt and reused across
       // retries (network retry, refresh-and-resubmit, a double-click that
