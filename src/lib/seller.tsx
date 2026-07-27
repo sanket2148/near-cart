@@ -33,6 +33,7 @@ import {
   updateProduct as updateProductFn,
   removeProduct as removeProductFn,
   toggleStock as toggleStockFn,
+  recordCounterSale as recordCounterSaleFn,
   getShopOrders as getShopOrdersFn,
   acceptOrder as acceptOrderFn,
   rejectOrder as rejectOrderFn,
@@ -222,6 +223,8 @@ type SellerContextValue = {
   updateProduct: (id: string, patch: Partial<Product>) => Promise<void>;
   removeProduct: (id: string) => void;
   toggleStock: (id: string) => void;
+  /** Records a real in-person counter sale — decrements stock through the same RPC an online order uses, no order rows created. Throws on failure (e.g. out of stock) so the UI can show it. */
+  recordCounterSale: (items: { productId: string; quantity: number }[]) => Promise<void>;
   acceptOrder: (id: string) => void;
   rejectOrder: (id: string) => void;
   advanceOrder: (id: string) => void;
@@ -358,6 +361,10 @@ export function SellerProvider({ children }: { children: ReactNode }) {
       },
       toggleStock: (id) => {
         void toggleStockFn({ data: { productId: id } }).then(invalidateProducts);
+      },
+      recordCounterSale: async (items) => {
+        await recordCounterSaleFn({ data: { shopId: shop.id, items } });
+        await invalidateProducts();
       },
       acceptOrder: (id) => {
         void acceptOrderFn({ data: { orderId: id } }).then(invalidateOrders);

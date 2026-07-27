@@ -183,6 +183,19 @@ export const toggleStock = createServerFn({ method: "POST" })
     return be.toggleStock(data.productId, context.uid);
   });
 
+export const recordCounterSale = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .inputValidator(
+    z.object({
+      shopId: z.string().min(1),
+      items: z.array(z.object({ productId: z.string().min(1), quantity: z.number().int().min(1) })).min(1),
+    }),
+  )
+  .handler(async ({ context, data }) => {
+    const be = await import("./backend.server");
+    return be.recordCounterSale(data.shopId, context.uid, data.items);
+  });
+
 export const getShopOrders = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
   .inputValidator(z.object({ shopId: z.string().min(1) }))

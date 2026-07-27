@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Plus, Trash2, Search, Pencil, Camera, Loader2, ScanBarcode, Info } from "lucide-react";
+import { Plus, Trash2, Search, Pencil, Camera, Loader2, ScanBarcode, Info, Receipt, X } from "lucide-react";
 import { useSeller } from "@/lib/seller";
 import { formatINR, type Product } from "@/lib/data";
 import { uploadProductImage, getCatalogProductByBarcode } from "@/lib/seller-data/api.functions";
@@ -58,16 +58,25 @@ function SellerProducts() {
         </div>
       )}
 
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <h1 className="text-xl font-extrabold">Products</h1>
-        <ProductDialog
-          trigger={
-            <Button variant="hero" size="sm">
-              <Plus className="h-4 w-4" /> Add
-            </Button>
-          }
-          onDuplicateFound={setDuplicateTarget}
-        />
+        <div className="flex gap-2">
+          <QuickSaleDialog
+            trigger={
+              <Button variant="outline" size="sm">
+                <Receipt className="h-4 w-4" /> Record Sale
+              </Button>
+            }
+          />
+          <ProductDialog
+            trigger={
+              <Button variant="hero" size="sm">
+                <Plus className="h-4 w-4" /> Add
+              </Button>
+            }
+            onDuplicateFound={setDuplicateTarget}
+          />
+        </div>
         {duplicateTarget && (
           <ProductDialog
             product={duplicateTarget}
@@ -488,6 +497,178 @@ function ProductDialog({
               )}
             </Button>
           </DialogFooter>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ─── Quick Sale (Phase 2, 2026-07-28) ───────────────────────────────────────
+// Records a real in-person counter sale — the universal, zero-dependency
+// answer to "how do we track what's sold at the counter" (see
+// plan/tasks/decisions.md: under 2% of India's kirana stores run any
+// billing software, so a vendor POS integration isn't a sound bet). Two
+// entry modes reusing existing pieces: BarcodeScanner.tsx for barcoded
+// items (matched against this shop's own catalog, not the Open Food Facts
+// onboarding lookup — this is finding an owned product, not adding a new
+// one), and a search-and-tap list for non-barcoded/loose items like
+// vegetables. v1 is single-item confirm-repeat, not a multi-item basket —
+// simplest to build and fastest to use standing at a real counter.
+function QuickSaleDialog({ trigger }: { trigger: React.ReactNode }) {
+  const { products, recordCounterSale } = useSeller();
+  const [open, setOpen] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [query, setQuery] = useState("");
+  const [selected, setSelected] = useState<Product | null>(null);
+  const [quantity, setQuantity] = useState("1");
+  const [submitting, setSubmitting] = useState(false);
+
+  const filtered = query
+    ? products.filter((p) => p.name.toLowerCase().includes(query.toLowerCase()))
+    : [];
+
+  function reset() {
+    setScanning(false);
+    setQuery("");
+    setSelected(null);
+    setQuantity("1");
+  }
+
+  function handleBarcodeDetected(code: string) {
+    setScanning(false);
+    const match = products.find((p) => p.barcode && p.barcode === code);
+    if (match) {
+      setSelected(match);
+    } else {
+      toast.error("No product in your catalog has that barcode.");
+    }
+  }
+
+  async function handleConfirm() {
+    if (!selected) return;
+    const qty = Number(quantity);
+    if (!qty || qty < 1) {
+      toast.error("Enter a valid quantity.");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await recordCounterSale([{ productId: selected.id, quantity: qty }]);
+      toast.success(`Recorded: ${qty} × ${selected.name}`);
+      // Stay open, ready for the next sale — this is meant to be used
+      // standing at a counter, repeated for each customer.
+      setSelected(null);
+      setQuantity("1");
+      setQuery("");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't record this sale.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next) reset();
+      }}
+    >
+      <DialogTrigger asChild>{trigger}</DialogTrigger>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Record a sale</DialogTitle>
+        </DialogHeader>
+
+        {scanning ? (
+          <BarcodeScanner onDetected={handleBarcodeDetected} onClose={() => setScanning(false)} />
+        ) : selected ? (
+          <div className="space-y-3">
+            <div className="flex items-center gap-3 rounded-xl border border-border p-3">
+              {selected.imageUrl ? (
+                <img
+                  src={selected.imageUrl}
+                  alt={selected.name}
+                  className="h-11 w-11 shrink-0 rounded-xl object-cover"
+                />
+              ) : (
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-muted text-xl">
+                  {selected.emoji}
+                </span>
+              )}
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-bold">{selected.name}</p>
+                <p className="text-xs text-muted-foreground">
+                  {formatINR(selected.price)} · {selected.unit}
+                  {selected.stockQty != null && ` · ${selected.stockQty} in stock`}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelected(null)}
+                className="shrink-0 rounded-lg p-1.5 text-muted-foreground hover:bg-muted"
+                aria-label="Change product"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="sale-qty">Quantity sold</Label>
+              <Input
+                id="sale-qty"
+                type="number"
+                min="1"
+                value={quantity}
+                onChange={(e) => setQuantity(e.target.value)}
+              />
+            </div>
+            <Button variant="hero" className="w-full" disabled={submitting} onClick={handleConfirm}>
+              {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Record sale"}
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <Button type="button" variant="outline" className="w-full" onClick={() => setScanning(true)}>
+              <ScanBarcode className="h-4 w-4" /> Scan barcode
+            </Button>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Or search your products (e.g. loose vegetables)"
+                className="pl-9"
+              />
+            </div>
+            {query && (
+              <ul className="max-h-64 space-y-1 overflow-y-auto">
+                {filtered.length === 0 ? (
+                  <li className="p-3 text-center text-xs text-muted-foreground">No products found.</li>
+                ) : (
+                  filtered.map((p) => (
+                    <li key={p.id}>
+                      <button
+                        type="button"
+                        onClick={() => setSelected(p)}
+                        className="flex w-full items-center gap-3 rounded-xl p-2 text-left hover:bg-muted"
+                      >
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted text-lg">
+                          {p.emoji}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-semibold">{p.name}</span>
+                          <span className="block text-xs text-muted-foreground">
+                            {formatINR(p.price)} · {p.unit}
+                          </span>
+                        </span>
+                      </button>
+                    </li>
+                  ))
+                )}
+              </ul>
+            )}
+          </div>
         )}
       </DialogContent>
     </Dialog>

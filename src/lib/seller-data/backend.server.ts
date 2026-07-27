@@ -638,6 +638,35 @@ export async function toggleStock(productId: string, callerId: string): Promise<
   if (updateErr) throw new Error(`toggleStock failed: ${updateErr.message}`);
 }
 
+// ─── Quick Sale: recording a real in-person counter sale (Phase 2, 2026-07-28) ─
+// The actual answer to "how do we track sales that bypass NearCart" — real-
+// world research found under 2% of India's kirana stores run any billing
+// software, and the few that do are fragmented across incompatible vendors
+// with no common API (see plan/tasks/decisions.md). A vendor POS integration
+// isn't a sound bet; this is a universal, zero-dependency in-app recorder
+// instead. Routes through the exact same decrement_stock_for_sale RPC
+// placeOrder uses (migration 0018), just with reason='counter_sale' and no
+// order_id — guarantees an online order and a counter sale can never race
+// each other into overselling the same unit. No orders/order_items rows are
+// created; this isn't a marketplace order.
+export type CounterSaleItem = { productId: string; quantity: number };
+
+export async function recordCounterSale(
+  shopId: string,
+  callerId: string,
+  items: CounterSaleItem[],
+): Promise<void> {
+  await assertShopOwner(shopId, callerId);
+  if (items.length === 0) throw new Error("No items to record.");
+  const { error } = await admin().rpc("decrement_stock_for_sale", {
+    p_shop_id: shopId,
+    p_items: items.map((i) => ({ product_id: i.productId, quantity: i.quantity })),
+    p_reason: "counter_sale",
+    p_order_id: null,
+  });
+  if (error) throw new Error(error.message);
+}
+
 // ─── Orders (seller side) ───────────────────────────────────────────────────
 
 export type SellerOrderStatus =
