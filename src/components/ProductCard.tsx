@@ -1,6 +1,6 @@
 import { Minus, Plus, Heart } from "lucide-react";
 import type { Product } from "@/lib/data";
-import { formatINR } from "@/lib/data";
+import { formatINR, LOW_STOCK_THRESHOLD } from "@/lib/data";
 import { useCart } from "@/lib/cart";
 import { cn } from "@/lib/utils";
 
@@ -9,8 +9,6 @@ type Props = {
   wishlisted?: boolean;
   onToggleWishlist?: (productId: string) => void;
 };
-
-const LOW_STOCK_THRESHOLD = 5;
 
 export function ProductCard({ product, wishlisted, onToggleWishlist }: Props) {
   const { add, setQty, qtyOf } = useCart();

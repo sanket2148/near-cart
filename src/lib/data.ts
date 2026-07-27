@@ -24,6 +24,9 @@ export type Product = {
   barcode?: string;
 };
 
+/** Shared between ProductCard.tsx's "Only N left" customer-facing badge and the seller-side low-stock notification (notifications/backend.server.ts) — a single shared constant so the two can't silently drift apart on what "low" means. */
+export const LOW_STOCK_THRESHOLD = 5;
+
 export type Shop = {
   id: string;
   name: string;

@@ -12,7 +12,7 @@
 // current location, rather than requiring a full address CRUD UI upfront.
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { insertNotification } from "@/lib/notifications/backend.server";
+import { insertNotification, notifyLowStockCrossings } from "@/lib/notifications/backend.server";
 
 let _admin: SupabaseClient | null = null;
 
@@ -402,13 +402,14 @@ export async function placeOrder(input: PlaceOrderInput): Promise<CustomerOrder>
   // first and this failed after, there'd be a real order row to manually
   // clean up. order_id is null here for the same structural reason.
   const items = input.items.map((i) => ({ product_id: i.productId, quantity: i.quantity }));
-  const { error: stockErr } = await admin().rpc("decrement_stock_for_sale", {
+  const { data: stockResults, error: stockErr } = await admin().rpc("decrement_stock_for_sale", {
     p_shop_id: input.shopId,
     p_items: items,
     p_reason: "online_order",
     p_order_id: null,
   });
   if (stockErr) throw new Error(stockErr.message);
+  await notifyLowStockCrossings(input.shopId, stockResults ?? []);
 
   // 4-digit handoff codes. For a delivery order: shop→partner at pickup,
   // partner→customer at delivery (Phase E) — generated up front so they

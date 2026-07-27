@@ -16,7 +16,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Product } from "@/lib/data";
 import type { BusinessType, BadgeTier } from "@/lib/verification";
-import { insertNotification } from "@/lib/notifications/backend.server";
+import { insertNotification, notifyLowStockCrossings } from "@/lib/notifications/backend.server";
 
 let _admin: SupabaseClient | null = null;
 
@@ -658,13 +658,14 @@ export async function recordCounterSale(
 ): Promise<void> {
   await assertShopOwner(shopId, callerId);
   if (items.length === 0) throw new Error("No items to record.");
-  const { error } = await admin().rpc("decrement_stock_for_sale", {
+  const { data: stockResults, error } = await admin().rpc("decrement_stock_for_sale", {
     p_shop_id: shopId,
     p_items: items.map((i) => ({ product_id: i.productId, quantity: i.quantity })),
     p_reason: "counter_sale",
     p_order_id: null,
   });
   if (error) throw new Error(error.message);
+  await notifyLowStockCrossings(shopId, stockResults ?? []);
 }
 
 // ─── Orders (seller side) ───────────────────────────────────────────────────

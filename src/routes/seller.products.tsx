@@ -1,8 +1,20 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Plus, Trash2, Search, Pencil, Camera, Loader2, ScanBarcode, Info, Receipt, X } from "lucide-react";
+import {
+  Plus,
+  Minus,
+  Trash2,
+  Search,
+  Pencil,
+  Camera,
+  Loader2,
+  ScanBarcode,
+  Info,
+  Receipt,
+  X,
+} from "lucide-react";
 import { useSeller } from "@/lib/seller";
 import { formatINR, type Product } from "@/lib/data";
 import { uploadProductImage, getCatalogProductByBarcode } from "@/lib/seller-data/api.functions";
@@ -28,15 +40,37 @@ export const Route = createFileRoute("/seller/products")({
 });
 
 function SellerProducts() {
-  const { shop, products, toggleStock, removeProduct } = useSeller();
+  const { shop, products, toggleStock, updateProduct, removeProduct } = useSeller();
   const [query, setQuery] = useState("");
   // Set when a barcode scan during "Add product" matches something already
   // in this shop's own catalog — jumps straight to editing that product
   // instead of letting the merchant accidentally create a second row for
   // the same item. See ProductDialog's handleBarcodeDetected.
   const [duplicateTarget, setDuplicateTarget] = useState<Product | null>(null);
+  const [bulkUpdating, setBulkUpdating] = useState(false);
 
   const filtered = products.filter((p) => p.name.toLowerCase().includes(query.toLowerCase()));
+  // Bulk in/out-of-stock only makes sense for untracked products — a tracked
+  // product's in-stock state is derived from its real quantity, not
+  // settable, so there's no single sensible bulk value to apply to it.
+  const untracked = products.filter((p) => p.stockQty == null);
+
+  async function bulkSetStock(inStock: boolean) {
+    const toChange = untracked.filter((p) => p.inStock !== inStock);
+    if (toChange.length === 0) {
+      toast(`All untracked products are already ${inStock ? "in" : "out of"} stock`);
+      return;
+    }
+    setBulkUpdating(true);
+    try {
+      await Promise.all(toChange.map((p) => updateProduct(p.id, { inStock })));
+      toast.success(`Marked ${toChange.length} product${toChange.length > 1 ? "s" : ""} ${inStock ? "in stock" : "out of stock"}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't update some products.");
+    } finally {
+      setBulkUpdating(false);
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -98,6 +132,29 @@ function SellerProducts() {
         />
       </div>
 
+      {untracked.length > 0 && (
+        <div className="flex items-center gap-2 text-xs">
+          <span className="text-muted-foreground">Bulk (untracked products):</span>
+          <button
+            type="button"
+            disabled={bulkUpdating}
+            onClick={() => bulkSetStock(true)}
+            className="font-semibold text-primary hover:underline disabled:opacity-50"
+          >
+            Mark all in stock
+          </button>
+          <span className="text-muted-foreground">·</span>
+          <button
+            type="button"
+            disabled={bulkUpdating}
+            onClick={() => bulkSetStock(false)}
+            className="font-semibold text-destructive hover:underline disabled:opacity-50"
+          >
+            Mark all out of stock
+          </button>
+        </div>
+      )}
+
       {filtered.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground">
           No products found.
@@ -143,9 +200,16 @@ function SellerProducts() {
               <div className="flex flex-col items-end gap-2">
                 {/* Tracked products (real stock_qty) derive in/out-of-stock
                     automatically as orders decrement it — no manual switch,
-                    since it would just be overwritten by the next order. */}
-                {p.stockQty == null && (
+                    since it would just be overwritten by the next order.
+                    Instead they get a direct quantity stepper, so a stock
+                    correction doesn't need opening the full edit dialog. */}
+                {p.stockQty == null ? (
                   <Switch checked={p.inStock} onCheckedChange={() => toggleStock(p.id)} />
+                ) : (
+                  <QuantityStepper
+                    value={p.stockQty}
+                    onCommit={(next) => updateProduct(p.id, { stockQty: next })}
+                  />
                 )}
                 <div className="flex gap-1">
                   <ProductDialog
@@ -171,6 +235,65 @@ function SellerProducts() {
           ))}
         </ul>
       )}
+    </div>
+  );
+}
+
+// Direct, debounced quantity edit for a tracked product — no dialog needed
+// for a routine stock correction. Debounces the actual save (not the local
+// display) so rapid +/- taps or typing don't fire a network call per
+// keystroke; local `value` still updates instantly for responsive feel.
+function QuantityStepper({
+  value,
+  onCommit,
+}: {
+  value: number;
+  onCommit: (next: number) => Promise<void>;
+}) {
+  const [local, setLocal] = useState(value);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Stay in sync if the real value changes from elsewhere (an order coming
+  // in decrements it server-side while this row is on screen).
+  useEffect(() => setLocal(value), [value]);
+
+  function change(next: number) {
+    const clamped = Math.max(0, Math.round(next));
+    setLocal(clamped);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      onCommit(clamped).catch((err) => {
+        toast.error(err instanceof Error ? err.message : "Couldn't update quantity.");
+        setLocal(value); // revert the optimistic local value on failure
+      });
+    }, 600);
+  }
+
+  return (
+    <div className="flex items-center gap-1 rounded-lg border border-border">
+      <button
+        type="button"
+        onClick={() => change(local - 1)}
+        className="flex h-7 w-7 items-center justify-center rounded-l-lg text-muted-foreground hover:bg-muted"
+        aria-label="Decrease quantity"
+      >
+        <Minus className="h-3 w-3" />
+      </button>
+      <input
+        type="number"
+        min="0"
+        value={local}
+        onChange={(e) => change(Number(e.target.value))}
+        className="w-10 border-x border-border bg-transparent text-center text-xs font-bold outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+      />
+      <button
+        type="button"
+        onClick={() => change(local + 1)}
+        className="flex h-7 w-7 items-center justify-center rounded-r-lg text-muted-foreground hover:bg-muted"
+        aria-label="Increase quantity"
+      >
+        <Plus className="h-3 w-3" />
+      </button>
     </div>
   );
 }
