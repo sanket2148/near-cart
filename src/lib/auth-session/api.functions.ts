@@ -23,6 +23,31 @@ export const signUp = createServerFn({ method: "POST" })
     return { id: result.userId, email: result.email };
   });
 
+// The OAuth code exchange itself happens client-side (src/routes/auth.callback.tsx)
+// — this just takes the resulting session tokens, re-verifies them for real
+// against Supabase (never trusts a client-supplied token blindly), and
+// writes them into the same real HttpOnly cookies every other login path
+// uses. See src/lib/auth-session/backend.server.ts's verifyOAuthSession.
+export const completeOAuthSession = createServerFn({ method: "POST" })
+  .inputValidator(
+    z.object({
+      accessToken: z.string().min(1),
+      refreshToken: z.string().min(1),
+      expiresIn: z.number().int().positive(),
+    }),
+  )
+  .handler(async ({ data }) => {
+    const be = await import("./backend.server");
+    const cookies = await import("./cookies.server");
+    const user = await be.verifyOAuthSession(data.accessToken);
+    cookies.setSessionCookies({
+      access_token: data.accessToken,
+      refresh_token: data.refreshToken,
+      expires_in: data.expiresIn,
+    });
+    return user;
+  });
+
 export const getCurrentUser = createServerFn({ method: "GET" }).handler(async () => {
   const cookies = await import("./cookies.server");
   const accessToken = cookies.readAccessTokenCookie();
