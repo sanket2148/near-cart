@@ -160,7 +160,7 @@ async function priceItems(
   if (items.length === 0) throw new Error("Cannot price an empty order");
   const { data: products, error } = await admin()
     .from("products")
-    .select("id, name, emoji, unit, price_amount, shop_id")
+    .select("id, name, emoji, unit, price_amount, shop_id, in_stock, stock_qty")
     .in(
       "id",
       items.map((i) => i.productId),
@@ -173,6 +173,18 @@ async function priceItems(
       throw new Error(`Product ${item.productId} does not belong to shop ${shopId}`);
     }
     if (item.quantity < 1) throw new Error(`Invalid quantity for product ${item.productId}`);
+    // A friendly, specific pre-check — not the authoritative one. It can be
+    // stale by the time placeOrder's atomic RPC (decrement_stock_for_sale,
+    // migration 0018) actually runs a moment later; that's what genuinely
+    // enforces this under concurrency. This just turns "some item is out of
+    // stock" into "Amul Milk 500ml is out of stock" instead of a generic
+    // failure, at both quote time and final placement.
+    if (!p.in_stock) {
+      throw new Error(`${p.name} is out of stock.`);
+    }
+    if (p.stock_qty != null && p.stock_qty < item.quantity) {
+      throw new Error(`${p.name} only has ${p.stock_qty} left in stock.`);
+    }
     return {
       productId: p.id,
       name: p.name,
@@ -379,6 +391,24 @@ export async function placeOrder(input: PlaceOrderInput): Promise<CustomerOrder>
   const gatewayConfigured = input.paymentMethod !== "cod" && paymentsBe.isConfigured();
   const status =
     input.paymentMethod === "cod" ? "cod_confirmed" : gatewayConfigured ? "created" : "paid";
+
+  // Real, race-safe stock check + decrement (decrement_stock_for_sale,
+  // migration 0018) — the one real enforcement point closing the
+  // "in_stock/stock_qty never checked" gap (priceItems's check above is
+  // just a friendly pre-check, not authoritative). Must run before the
+  // `orders` insert below: unlike place_order_mobile (a single plpgsql
+  // function call, one implicit transaction), each of these `admin()`
+  // calls is its own independent request — if the order were inserted
+  // first and this failed after, there'd be a real order row to manually
+  // clean up. order_id is null here for the same structural reason.
+  const items = input.items.map((i) => ({ product_id: i.productId, quantity: i.quantity }));
+  const { error: stockErr } = await admin().rpc("decrement_stock_for_sale", {
+    p_shop_id: input.shopId,
+    p_items: items,
+    p_reason: "online_order",
+    p_order_id: null,
+  });
+  if (stockErr) throw new Error(stockErr.message);
 
   // 4-digit handoff codes. For a delivery order: shop→partner at pickup,
   // partner→customer at delivery (Phase E) — generated up front so they

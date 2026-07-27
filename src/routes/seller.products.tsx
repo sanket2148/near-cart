@@ -124,11 +124,20 @@ function SellerProducts() {
                       : "bg-destructive/10 text-destructive",
                   )}
                 >
-                  {p.inStock ? "In stock" : "Out of stock"}
+                  {p.stockQty != null
+                    ? `${p.stockQty} in stock`
+                    : p.inStock
+                      ? "In stock"
+                      : "Out of stock"}
                 </span>
               </div>
               <div className="flex flex-col items-end gap-2">
-                <Switch checked={p.inStock} onCheckedChange={() => toggleStock(p.id)} />
+                {/* Tracked products (real stock_qty) derive in/out-of-stock
+                    automatically as orders decrement it — no manual switch,
+                    since it would just be overwritten by the next order. */}
+                {p.stockQty == null && (
+                  <Switch checked={p.inStock} onCheckedChange={() => toggleStock(p.id)} />
+                )}
                 <div className="flex gap-1">
                   <ProductDialog
                     product={p}
@@ -190,7 +199,12 @@ function ProductDialog({
     unit: product?.unit ?? "",
     category: product?.category ?? "",
     barcode: product?.barcode ?? "",
+    stockQty: product?.stockQty?.toString() ?? "",
   });
+  // Separate from form.stockQty's string value so the quantity field can be
+  // shown/hidden without losing whatever the seller already typed if they
+  // toggle tracking off and back on within the same session.
+  const [trackQty, setTrackQty] = useState(product?.stockQty != null);
 
   const set = (k: keyof typeof form, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -278,6 +292,7 @@ function ProductDialog({
       toast.error("Name and price are required");
       return;
     }
+    const stockQty = trackQty && form.stockQty.trim() ? Number(form.stockQty) : undefined;
     const payload = {
       name: form.name.trim(),
       emoji: form.emoji || "📦",
@@ -285,8 +300,12 @@ function ProductDialog({
       mrp: form.mrp ? Number(form.mrp) : undefined,
       unit: form.unit.trim() || "1 pc",
       category: form.category.trim() || "General",
-      inStock: true,
+      // Editing no longer silently resets an out-of-stock product back to
+      // in-stock on every save — reuses its current value; a tracked
+      // quantity overrides this server-side anyway (seller-data/backend.server.ts).
+      inStock: product ? product.inStock : true,
       barcode: form.barcode.trim() || undefined,
+      stockQty,
     };
     setSubmitting(true);
     try {
@@ -431,6 +450,30 @@ function ProductDialog({
                 placeholder="Staples"
               />
             </div>
+          </div>
+          <div className="rounded-xl border border-border p-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <Label htmlFor="track-qty">Track quantity</Label>
+                <p className="text-xs text-muted-foreground">
+                  In stock / out of stock updates automatically as orders come in.
+                </p>
+              </div>
+              <Switch id="track-qty" checked={trackQty} onCheckedChange={setTrackQty} />
+            </div>
+            {trackQty && (
+              <div className="mt-3 space-y-1.5">
+                <Label htmlFor="stockQty">Quantity in stock</Label>
+                <Input
+                  id="stockQty"
+                  type="number"
+                  min="0"
+                  value={form.stockQty}
+                  onChange={(e) => set("stockQty", e.target.value)}
+                  placeholder="e.g. 25"
+                />
+              </div>
+            )}
           </div>
         </div>
         {!scanning && (

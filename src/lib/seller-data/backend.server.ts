@@ -514,6 +514,7 @@ function mapProductRow(row: any): Product {
     unit: row.unit ?? "",
     category: row.menu_section ?? "",
     inStock: Boolean(row.in_stock),
+    stockQty: row.stock_qty ?? undefined,
     imageUrl: publicImageUrl(row.image_path),
     barcode: row.barcode ?? undefined,
   };
@@ -539,6 +540,10 @@ export async function addProduct(
   const catalogProductId = input.barcode
     ? await getOrCreateCatalogProduct(input.barcode, input.name)
     : null;
+  // Tracked (stockQty provided) means in_stock is derived from the real
+  // quantity, not the client-sent toggle — untracked products keep the
+  // existing fully-manual behavior unchanged.
+  const inStock = input.stockQty != null ? input.stockQty > 0 : input.inStock;
   const { data, error } = await admin()
     .from("products")
     .insert({
@@ -549,7 +554,8 @@ export async function addProduct(
       mrp_amount: input.mrp != null ? Math.round(input.mrp * 100) : null,
       unit: input.unit,
       menu_section: input.category,
-      in_stock: input.inStock,
+      in_stock: inStock,
+      stock_qty: input.stockQty ?? null,
       barcode: input.barcode || null,
       catalog_product_id: catalogProductId,
     })
@@ -582,7 +588,18 @@ export async function updateProduct(
     row.mrp_amount = patch.mrp != null ? Math.round(patch.mrp * 100) : null;
   if (patch.unit !== undefined) row.unit = patch.unit;
   if (patch.category !== undefined) row.menu_section = patch.category;
-  if (patch.inStock !== undefined) row.in_stock = patch.inStock;
+  // Tracked (stockQty provided) means in_stock derives from the real
+  // quantity — a manual inStock patch alongside it is ignored, same
+  // derivation rule as addProduct. Once a product starts tracking a real
+  // quantity, going back to untracked isn't supported by this patch shape
+  // yet (a rare enough case to leave as a known gap, not worth the extra
+  // nullable-vs-omitted schema complexity for this pass).
+  if (patch.stockQty !== undefined) {
+    row.stock_qty = patch.stockQty;
+    row.in_stock = patch.stockQty > 0;
+  } else if (patch.inStock !== undefined) {
+    row.in_stock = patch.inStock;
+  }
   if (patch.barcode !== undefined) {
     row.barcode = patch.barcode || null;
     row.catalog_product_id = patch.barcode

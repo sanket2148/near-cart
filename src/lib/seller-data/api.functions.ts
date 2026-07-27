@@ -11,6 +11,8 @@ const ProductInputSchema = z.object({
   category: z.string(),
   inStock: z.boolean(),
   barcode: z.string().optional(),
+  /** Present only when the seller tracks a real quantity — absent means "untracked," matching stock_qty's own null-means-untracked convention. */
+  stockQty: z.number().int().min(0).optional(),
 });
 
 // Every function below used to trust a client-supplied ownerId/shopId/
