@@ -39,15 +39,20 @@ export function AppShell({
 
   return (
     <div className="flex min-h-screen bg-background w-full">
-      {/* Responsive Sidebar Drawer */}
-      <SidebarDrawer mobileOpen={mobileOpen} onMobileOpenChange={setMobileOpen} />
+      {/* Responsive Sidebar Drawer — hideNav means "focused single-task
+          page, no navigation chrome at all" (checkout, order tracking,
+          login gates), so it suppresses this too, not just BottomNav below.
+          Previously only did the latter — the sidebar rendered unconditionally
+          at md: widths regardless of hideNav, a real bug every hideNav
+          caller's intent already assumed was handled. */}
+      {!hideNav && <SidebarDrawer mobileOpen={mobileOpen} onMobileOpenChange={setMobileOpen} />}
 
       {/* Main Content Pane */}
       <div className="flex-1 flex flex-col min-w-0">
         <AppHeader
           subtitle={subtitle}
           wide={wide}
-          onMenuClick={() => setMobileOpen(true)}
+          onMenuClick={hideNav ? undefined : () => setMobileOpen(true)}
           onLocationClick={() => setLocationModalOpen(true)}
         />
         <main
