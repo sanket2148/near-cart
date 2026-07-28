@@ -8,13 +8,19 @@ import {
   UserCheck,
   Search,
   Loader2,
+  Copy,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { DOC_TYPE_LABELS, loadVerification, saveVerification, verificationStorageKey, type ShopVerification } from "@/lib/verification";
-import { listShopsForReview, approveShop, rejectShop } from "@/lib/admin-data/api.functions";
+import {
+  listShopsForReview,
+  approveShop,
+  rejectShop,
+  findDuplicateCandidatesForShop,
+} from "@/lib/admin-data/api.functions";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/admin/verification")({
@@ -23,6 +29,7 @@ export const Route = createFileRoute("/admin/verification")({
 
 type AdminShopReview = Awaited<ReturnType<typeof listShopsForReview>>[number];
 type QueueItem = AdminShopReview & { levels?: ShopVerification["levels"] };
+type ShopDuplicateCandidate = Awaited<ReturnType<typeof findDuplicateCandidatesForShop>>[number];
 
 function AdminVerificationPage() {
   const [items, setItems] = useState<QueueItem[]>([]);
@@ -31,6 +38,8 @@ function AdminVerificationPage() {
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState<string>("all");
   const [reviewNotes, setReviewNotes] = useState("");
+  const [duplicates, setDuplicates] = useState<ShopDuplicateCandidate[]>([]);
+  const [duplicatesLoading, setDuplicatesLoading] = useState(false);
 
   useEffect(() => {
     listShopsForReview()
@@ -48,6 +57,28 @@ function AdminVerificationPage() {
       })
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    if (!selectedItem) {
+      setDuplicates([]);
+      return;
+    }
+    let cancelled = false;
+    setDuplicatesLoading(true);
+    findDuplicateCandidatesForShop({ data: { shopId: selectedItem.shopId } })
+      .then((rows) => {
+        if (!cancelled) setDuplicates(rows);
+      })
+      .catch(() => {
+        if (!cancelled) setDuplicates([]);
+      })
+      .finally(() => {
+        if (!cancelled) setDuplicatesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedItem?.shopId]);
 
   const handleApprove = async () => {
     if (!selectedItem) return;
@@ -231,6 +262,52 @@ function AdminVerificationPage() {
                     </ul>
                   </div>
                 )}
+
+                {/* Possible duplicate listings */}
+                {duplicatesLoading ? (
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" /> Checking nearby shops for possible duplicates…
+                  </div>
+                ) : duplicates.length > 0 ? (
+                  <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4 space-y-2">
+                    <h3 className="flex items-center gap-2 text-sm font-bold text-amber-800">
+                      <Copy className="h-4 w-4" /> Possible duplicate listing{duplicates.length > 1 ? "s" : ""}
+                    </h3>
+                    <p className="text-xs text-amber-800/80">
+                      Similarly-named shop{duplicates.length > 1 ? "s" : ""} found nearby — worth a look before approving.
+                    </p>
+                    <ul className="space-y-1.5">
+                      {duplicates.map((d) => (
+                        <li
+                          key={d.id}
+                          className="flex items-center justify-between gap-2 bg-white/70 rounded-lg p-2.5 text-xs"
+                        >
+                          <div className="min-w-0">
+                            <p className="font-bold truncate">{d.name}</p>
+                            <p className="text-[10px] text-muted-foreground truncate">
+                              {d.addressLine ?? d.city ?? "No address on file"}
+                            </p>
+                          </div>
+                          <div className="flex flex-col items-end gap-1 shrink-0">
+                            <span
+                              className={cn(
+                                "rounded-full px-2 py-0.5 text-[9px] font-bold",
+                                d.claimed
+                                  ? "bg-emerald-100 text-emerald-800"
+                                  : "bg-muted text-muted-foreground",
+                              )}
+                            >
+                              {d.claimed ? "CLAIMED" : "UNCLAIMED"}
+                            </span>
+                            <span className="text-[10px] text-muted-foreground">
+                              {Math.round(d.distanceM)}m away
+                            </span>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
 
                 {/* Level details grid */}
                 {!selectedItem.levels ? (

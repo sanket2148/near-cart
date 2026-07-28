@@ -37,6 +37,14 @@ export const rejectShop = createServerFn({ method: "POST" })
     return be.rejectShop(data.shopId);
   });
 
+export const findDuplicateCandidatesForShop = createServerFn({ method: "GET" })
+  .middleware([adminMiddleware])
+  .inputValidator(z.object({ shopId: z.string().min(1) }))
+  .handler(async ({ data }) => {
+    const be = await import("./backend.server");
+    return be.findDuplicateCandidatesForShop(data.shopId);
+  });
+
 // ─── Shops ───────────────────────────────────────────────────────────────
 
 export const listAllShops = createServerFn({ method: "GET" })

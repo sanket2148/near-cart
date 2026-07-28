@@ -82,6 +82,61 @@ export async function listShopsForReview(): Promise<AdminShopReview[]> {
   );
 }
 
+export type ShopDuplicateCandidate = {
+  id: string;
+  name: string;
+  addressLine: string | null;
+  city: string | null;
+  claimed: boolean;
+  distanceM: number;
+  nameScore: number;
+};
+
+/**
+ * Real duplicate-listing hint for the verification review screen — reuses
+ * find_shop_matches (migration 0014, pg_trgm + PostGIS), the same function
+ * CreateShopStep.tsx already calls for the merchant-side check
+ * (findPossibleShopMatches). Unlike that caller, this one does NOT filter to
+ * unclaimed rows: a claimed, already-live shop at the same spot with a
+ * similar name is the more actionable signal here — two real merchants
+ * somehow both listing the same physical shop — not just an OSM import the
+ * merchant could claim instead.
+ */
+export async function findDuplicateCandidatesForShop(
+  shopId: string,
+): Promise<ShopDuplicateCandidate[]> {
+  const { data: shop, error: shopErr } = await admin()
+    .from("shops")
+    .select("name, lat, lng")
+    .eq("id", shopId)
+    .maybeSingle();
+  if (shopErr) throw new Error(`findDuplicateCandidatesForShop failed: ${shopErr.message}`);
+  if (!shop || shop.lat == null || shop.lng == null) return [];
+
+  const { data, error } = await admin().rpc("find_shop_matches", {
+    p_name: shop.name,
+    p_lat: shop.lat,
+    p_lng: shop.lng,
+  });
+  if (error) throw new Error(`findDuplicateCandidatesForShop failed: ${error.message}`);
+
+  return (
+    (data ?? [])
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .filter((row: any) => row.id !== shopId)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .map((row: any) => ({
+        id: row.id,
+        name: row.name,
+        addressLine: row.address_line,
+        city: row.city,
+        claimed: row.claimed,
+        distanceM: row.distance_m,
+        nameScore: row.name_score,
+      }))
+  );
+}
+
 async function notifyShopOwner(shopId: string, title: string, body: string): Promise<void> {
   const { data: shop } = await admin()
     .from("shops")
