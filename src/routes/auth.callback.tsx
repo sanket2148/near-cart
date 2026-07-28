@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-import { completeOAuthSession } from "@/lib/auth-session/api.functions";
+import { completeExternalSession } from "@/lib/auth-session/api.functions";
 
 export const Route = createFileRoute("/auth/callback")({
   head: () => ({ meta: [{ title: "Signing you in… — NearCart" }] }),
@@ -19,7 +19,7 @@ export const Route = createFileRoute("/auth/callback")({
 // can complete the exchange. Once that succeeds we hold a real Supabase
 // session client-side, but this app's actual trust boundary is the
 // server-issued HttpOnly cookies (src/lib/auth-session/cookies.server.ts) —
-// so the resulting tokens get handed to completeOAuthSession(), which
+// so the resulting tokens get handed to completeExternalSession(), which
 // re-verifies them for real before writing those same cookies. A full page
 // navigation (not a router push) back to "/" afterward makes AuthProvider
 // remount and pick the new session up via its existing getCurrentUser() call,
@@ -38,7 +38,7 @@ function AuthCallbackPage() {
         if (exchangeError || !data.session) {
           throw new Error(exchangeError?.message ?? "No session returned.");
         }
-        await completeOAuthSession({
+        await completeExternalSession({
           data: {
             accessToken: data.session.access_token,
             refreshToken: data.session.refresh_token,

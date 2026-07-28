@@ -35,7 +35,7 @@ type Props = {
 };
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const MIN_PASSWORD_LENGTH = 8;
+export const MIN_PASSWORD_LENGTH = 8;
 
 // Code + callback route are built and verified (tsc/eslint/vite build) and
 // the redirect flow itself works correctly (confirmed live: clicking the
@@ -182,6 +182,11 @@ export function EmailPasswordAuth({ title = "Log in to continue", subtitle, onSu
         >
           {mode === "login" ? "New here? Create an account" : "Already have an account? Log in"}
         </button>
+        {mode === "login" && (
+          <a href="/forgot-password" className="block text-center text-xs font-medium text-muted-foreground">
+            Forgot password?
+          </a>
+        )}
       </div>
     </div>
   );

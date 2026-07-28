@@ -15,8 +15,9 @@ import type { Session } from "@supabase/supabase-js";
 
 /** The only fields this file actually needs off a Session — narrower than the
  * real type (which also requires a full `user: User`) so callers that only
- * have the token trio (e.g. completeOAuthSession, reconstructing a session
- * from a client-exchanged OAuth code) don't need to fabricate one. A real
+ * have the token trio (e.g. completeExternalSession, reconstructing a session
+ * from a client-exchanged OAuth or password-recovery code) don't need to
+ * fabricate one. A real
  * `Session` object already satisfies this structurally. */
 export type SessionTokens = Pick<Session, "access_token" | "refresh_token" | "expires_in">;
 

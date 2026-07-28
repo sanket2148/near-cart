@@ -10,7 +10,7 @@ Future tasks not yet scheduled into a sprint.
 
 - [x] **Replaced email OTP with email + password** (no SMTP configured for this project, OTP delivery was unreliable) — see the fuller entry further down this file and decisions.md.
 - [x] **Fixed a real sidebar/auth contradiction** — `SidebarDrawer.tsx`'s profile section was hardcoded fake data ("Sanket Kumar") with a permanent "Log Out" button that never called the real `logout()`, contradicting pages that correctly checked real auth state. Now reflects `useAuth()` for real; live-verified with `e2e/sidebar-auth-state.spec.ts`.
-- [ ] **No password-reset flow** — deliberately deferred when OTP was dropped (would need email again, the exact dependency being removed). Worth a real decision later on whether/how to support it (e.g. a one-time SMTP provider just for reset emails, admin-assisted reset, etc.).
+- [~] **Password-reset flow (2026-07-28, see decisions.md) — code complete, blocked live on SMTP.** `/forgot-password` + `/auth/reset-password` built, reusing the Google-OAuth PKCE client-exchange pattern. `tsc`/`vite build` clean. Live test against the real Supabase project hit a real `504` from Supabase's SMTP relay (Brevo, user-configured) — reproduced 3x, consistent ~35s hang. Likely cause: Brevo's API key (`xkeysib-...`) and SMTP key (`xsmtpsib-...`) are different credentials; the SMTP form needs the latter. Nothing left to build — re-verify once the SMTP credential in the Supabase dashboard is fixed.
 
 ## OSM shop import + claim flow (2026-07-22/23, see decisions.md — marketplace cold-start fix)
 

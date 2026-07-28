@@ -22,6 +22,7 @@ import { Route as OrdersRouteImport } from './routes/orders'
 import { Route as OffersRouteImport } from './routes/offers'
 import { Route as NotificationsRouteImport } from './routes/notifications'
 import { Route as HelpRouteImport } from './routes/help'
+import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as CheckoutRouteImport } from './routes/checkout'
 import { Route as CartRouteImport } from './routes/cart'
 import { Route as ApiDocsRouteImport } from './routes/api-docs'
@@ -42,6 +43,7 @@ import { Route as PartnerProfileRouteImport } from './routes/partner.profile'
 import { Route as PartnerEarningsRouteImport } from './routes/partner.earnings'
 import { Route as PartnerDeliveriesRouteImport } from './routes/partner.deliveries'
 import { Route as OrderOrderIdRouteImport } from './routes/order.$orderId'
+import { Route as AuthResetPasswordRouteImport } from './routes/auth.reset-password'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
 import { Route as ApiDocsOpenapiDotjsonRouteImport } from './routes/api-docs.openapi[.]json'
 import { Route as AdminVerificationRouteImport } from './routes/admin.verification'
@@ -116,6 +118,11 @@ const NotificationsRoute = NotificationsRouteImport.update({
 const HelpRoute = HelpRouteImport.update({
   id: '/help',
   path: '/help',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
+  id: '/forgot-password',
+  path: '/forgot-password',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CheckoutRoute = CheckoutRouteImport.update({
@@ -218,6 +225,11 @@ const OrderOrderIdRoute = OrderOrderIdRouteImport.update({
   path: '/order/$orderId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthResetPasswordRoute = AuthResetPasswordRouteImport.update({
+  id: '/auth/reset-password',
+  path: '/auth/reset-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthCallbackRoute = AuthCallbackRouteImport.update({
   id: '/auth/callback',
   path: '/auth/callback',
@@ -277,6 +289,7 @@ export interface FileRoutesByFullPath {
   '/api-docs': typeof ApiDocsRouteWithChildren
   '/cart': typeof CartRoute
   '/checkout': typeof CheckoutRoute
+  '/forgot-password': typeof ForgotPasswordRoute
   '/help': typeof HelpRoute
   '/notifications': typeof NotificationsRoute
   '/offers': typeof OffersRoute
@@ -296,6 +309,7 @@ export interface FileRoutesByFullPath {
   '/admin/verification': typeof AdminVerificationRoute
   '/api-docs/openapi.json': typeof ApiDocsOpenapiDotjsonRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/auth/reset-password': typeof AuthResetPasswordRoute
   '/order/$orderId': typeof OrderOrderIdRoute
   '/partner/deliveries': typeof PartnerDeliveriesRoute
   '/partner/earnings': typeof PartnerEarningsRoute
@@ -321,6 +335,7 @@ export interface FileRoutesByTo {
   '/api-docs': typeof ApiDocsRouteWithChildren
   '/cart': typeof CartRoute
   '/checkout': typeof CheckoutRoute
+  '/forgot-password': typeof ForgotPasswordRoute
   '/help': typeof HelpRoute
   '/notifications': typeof NotificationsRoute
   '/offers': typeof OffersRoute
@@ -338,6 +353,7 @@ export interface FileRoutesByTo {
   '/admin/verification': typeof AdminVerificationRoute
   '/api-docs/openapi.json': typeof ApiDocsOpenapiDotjsonRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/auth/reset-password': typeof AuthResetPasswordRoute
   '/order/$orderId': typeof OrderOrderIdRoute
   '/partner/deliveries': typeof PartnerDeliveriesRoute
   '/partner/earnings': typeof PartnerEarningsRoute
@@ -365,6 +381,7 @@ export interface FileRoutesById {
   '/api-docs': typeof ApiDocsRouteWithChildren
   '/cart': typeof CartRoute
   '/checkout': typeof CheckoutRoute
+  '/forgot-password': typeof ForgotPasswordRoute
   '/help': typeof HelpRoute
   '/notifications': typeof NotificationsRoute
   '/offers': typeof OffersRoute
@@ -384,6 +401,7 @@ export interface FileRoutesById {
   '/admin/verification': typeof AdminVerificationRoute
   '/api-docs/openapi.json': typeof ApiDocsOpenapiDotjsonRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/auth/reset-password': typeof AuthResetPasswordRoute
   '/order/$orderId': typeof OrderOrderIdRoute
   '/partner/deliveries': typeof PartnerDeliveriesRoute
   '/partner/earnings': typeof PartnerEarningsRoute
@@ -412,6 +430,7 @@ export interface FileRouteTypes {
     | '/api-docs'
     | '/cart'
     | '/checkout'
+    | '/forgot-password'
     | '/help'
     | '/notifications'
     | '/offers'
@@ -431,6 +450,7 @@ export interface FileRouteTypes {
     | '/admin/verification'
     | '/api-docs/openapi.json'
     | '/auth/callback'
+    | '/auth/reset-password'
     | '/order/$orderId'
     | '/partner/deliveries'
     | '/partner/earnings'
@@ -456,6 +476,7 @@ export interface FileRouteTypes {
     | '/api-docs'
     | '/cart'
     | '/checkout'
+    | '/forgot-password'
     | '/help'
     | '/notifications'
     | '/offers'
@@ -473,6 +494,7 @@ export interface FileRouteTypes {
     | '/admin/verification'
     | '/api-docs/openapi.json'
     | '/auth/callback'
+    | '/auth/reset-password'
     | '/order/$orderId'
     | '/partner/deliveries'
     | '/partner/earnings'
@@ -499,6 +521,7 @@ export interface FileRouteTypes {
     | '/api-docs'
     | '/cart'
     | '/checkout'
+    | '/forgot-password'
     | '/help'
     | '/notifications'
     | '/offers'
@@ -518,6 +541,7 @@ export interface FileRouteTypes {
     | '/admin/verification'
     | '/api-docs/openapi.json'
     | '/auth/callback'
+    | '/auth/reset-password'
     | '/order/$orderId'
     | '/partner/deliveries'
     | '/partner/earnings'
@@ -545,6 +569,7 @@ export interface RootRouteChildren {
   ApiDocsRoute: typeof ApiDocsRouteWithChildren
   CartRoute: typeof CartRoute
   CheckoutRoute: typeof CheckoutRoute
+  ForgotPasswordRoute: typeof ForgotPasswordRoute
   HelpRoute: typeof HelpRoute
   NotificationsRoute: typeof NotificationsRoute
   OffersRoute: typeof OffersRoute
@@ -559,6 +584,7 @@ export interface RootRouteChildren {
   StatusRoute: typeof StatusRoute
   WishlistRoute: typeof WishlistRoute
   AuthCallbackRoute: typeof AuthCallbackRoute
+  AuthResetPasswordRoute: typeof AuthResetPasswordRoute
   OrderOrderIdRoute: typeof OrderOrderIdRoute
   ShopShopIdRoute: typeof ShopShopIdRoute
   ApiWebhooksRazorpayRoute: typeof ApiWebhooksRazorpayRoute
@@ -656,6 +682,13 @@ declare module '@tanstack/react-router' {
       path: '/help'
       fullPath: '/help'
       preLoaderRoute: typeof HelpRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/forgot-password': {
+      id: '/forgot-password'
+      path: '/forgot-password'
+      fullPath: '/forgot-password'
+      preLoaderRoute: typeof ForgotPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/checkout': {
@@ -796,6 +829,13 @@ declare module '@tanstack/react-router' {
       path: '/order/$orderId'
       fullPath: '/order/$orderId'
       preLoaderRoute: typeof OrderOrderIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/auth/reset-password': {
+      id: '/auth/reset-password'
+      path: '/auth/reset-password'
+      fullPath: '/auth/reset-password'
+      preLoaderRoute: typeof AuthResetPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/auth/callback': {
@@ -950,6 +990,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiDocsRoute: ApiDocsRouteWithChildren,
   CartRoute: CartRoute,
   CheckoutRoute: CheckoutRoute,
+  ForgotPasswordRoute: ForgotPasswordRoute,
   HelpRoute: HelpRoute,
   NotificationsRoute: NotificationsRoute,
   OffersRoute: OffersRoute,
@@ -964,6 +1005,7 @@ const rootRouteChildren: RootRouteChildren = {
   StatusRoute: StatusRoute,
   WishlistRoute: WishlistRoute,
   AuthCallbackRoute: AuthCallbackRoute,
+  AuthResetPasswordRoute: AuthResetPasswordRoute,
   OrderOrderIdRoute: OrderOrderIdRoute,
   ShopShopIdRoute: ShopShopIdRoute,
   ApiWebhooksRazorpayRoute: ApiWebhooksRazorpayRoute,
