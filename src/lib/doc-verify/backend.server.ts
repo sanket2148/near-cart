@@ -161,3 +161,33 @@ export async function verifyByDocType(docType: "gst" | "fssai" | "pan", number: 
   if (docType === "fssai") return verifyFssai(number, expectedName);
   return verifyPan(number, expectedName);
 }
+
+/**
+ * A GSTIN's middle 10 characters ARE the PAN of the registered entity — not
+ * a coincidence, the format is defined that way (2-digit state code, then
+ * the 10-char PAN, then entity/checksum digits — see GSTIN_PATTERN above).
+ * Extracting and comparing it against a separately uploaded PAN document is
+ * a real fraud check that needs no external API/registry call at all: it
+ * only needs both numbers to have been OCR-read correctly. Someone who
+ * found or photographed a real shop's GST certificate but isn't actually
+ * its owner would need a matching real PAN document in the same identity
+ * too, not just the ability to re-upload a copied image of one document.
+ */
+export function panFromGstin(gstin: string): string | null {
+  const clean = gstin.replace(/\s+/g, "").toUpperCase();
+  return GSTIN_PATTERN.test(clean) ? clean.slice(2, 12) : null;
+}
+
+export type GstPanCrossCheck = {
+  matched: boolean;
+  gstinPan: string;
+  documentPan: string;
+};
+
+/** Returns null (not "no cross-check possible" vs "mismatch") when either number doesn't even look like a real GSTIN/PAN — the caller decides what that means. */
+export function crossCheckGstPan(gstin: string, panNumber: string): GstPanCrossCheck | null {
+  const embedded = panFromGstin(gstin);
+  const clean = panNumber.replace(/\s+/g, "").toUpperCase();
+  if (!embedded || !PAN_PATTERN.test(clean)) return null;
+  return { matched: embedded === clean, gstinPan: embedded, documentPan: clean };
+}

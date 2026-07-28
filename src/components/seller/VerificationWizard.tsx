@@ -260,6 +260,12 @@ export function VerificationWizard({
       });
       const decision = overall?.decision ?? "UNDER_REVIEW";
 
+      // Cross-document checks (currently just the GST/PAN consistency check
+      // — see finalizeSubmission) can reject a submission even when every
+      // individual document looked fine on its own, so they get their own,
+      // more specific notes/toast rather than the generic per-document text.
+      const crossCheckIssues = overall?.issues ?? [];
+
       const l6Status: LevelStatus = decision === "REJECTED" ? "rejected" : "verified";
       const l7Status: LevelStatus =
         decision === "VERIFIED" ? "verified" : decision === "REJECTED" ? "rejected" : "submitted";
@@ -267,7 +273,9 @@ export function VerificationWizard({
         decision === "VERIFIED"
           ? "Approved automatically by the verification pipeline."
           : decision === "REJECTED"
-            ? "Rejected — one or more documents failed verification. Re-upload and resubmit."
+            ? crossCheckIssues.length > 0
+              ? crossCheckIssues.join(" ")
+              : "Rejected — one or more documents failed verification. Re-upload and resubmit."
             : "Submitted — pending manual review by the trust team.";
       const rejectedDocs = verification.levels.l2_documents.documents.filter(
         (d) => d.status === "rejected",
@@ -289,7 +297,7 @@ export function VerificationWizard({
         flagged: decision === "REJECTED",
         flagReasons:
           decision === "REJECTED"
-            ? rejectedDocs.map((d) => d.rejectionReason ?? `${d.docType} rejected`)
+            ? [...crossCheckIssues, ...rejectedDocs.map((d) => d.rejectionReason ?? `${d.docType} rejected`)]
             : verification.flagReasons,
         updatedAt: Date.now(),
       };
@@ -300,9 +308,13 @@ export function VerificationWizard({
       onCompleteAll(next);
 
       if (decision === "VERIFIED") toast.success("Shop verified successfully!");
-      else if (decision === "REJECTED")
-        toast.error("Verification rejected — please review and resubmit.");
-      else toast.success("Submitted for review. We'll notify you once approved.");
+      else if (decision === "REJECTED") {
+        toast.error(
+          crossCheckIssues.length > 0
+            ? crossCheckIssues[0]
+            : "Verification rejected — please review and resubmit.",
+        );
+      } else toast.success("Submitted for review. We'll notify you once approved.");
     } catch (err) {
       toast.error(
         err instanceof Error ? err.message : "Could not submit verification. Please try again.",

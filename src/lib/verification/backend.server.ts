@@ -518,6 +518,8 @@ export type SubmissionView = {
     confidence: number;
     documentCount: number;
     updatedAt: number | null;
+    /** Cross-document fraud checks that can only run once multiple documents exist together — see finalizeSubmission's GST/PAN cross-check. Empty/absent when nothing to report. */
+    issues?: string[];
   } | null;
 };
 
@@ -564,6 +566,7 @@ export async function getSubmission(
         overallConfidence: number;
         documentCount: number;
         updatedAt: number;
+        issues?: string[];
       }
     | undefined;
 
@@ -576,9 +579,41 @@ export async function getSubmission(
           confidence: sub.overallConfidence,
           documentCount: sub.documentCount,
           updatedAt: sub.updatedAt ?? null,
+          issues: sub.issues,
         }
       : null,
   };
+}
+
+/**
+ * Cross-document fraud check that can't run per-file (analyzeFile only ever
+ * sees one document at a time): a GSTIN's middle 10 characters are, by
+ * construction, the PAN of the entity it's registered to. If a shop's
+ * uploaded GST certificate and uploaded PAN document don't agree on that
+ * PAN, the two documents most likely don't belong to the same
+ * business/individual — a real signal that this isn't the shop's actual
+ * owner, not just an OCR quality issue. Needs no external API/registry
+ * call (see doc-verify/backend.server.ts's crossCheckGstPan), so it works
+ * today even with Deepvue unconfigured, and will keep working unchanged
+ * once it is.
+ */
+async function checkGstPanConsistency(documents: FileAnalysis[]): Promise<string[]> {
+  const gstDoc = documents.find((d) => d.category === "document" && d.docType === "gst");
+  const panDoc = documents.find((d) => d.category === "document" && d.docType === "pan");
+  if (!gstDoc || !panDoc) return [];
+
+  const docVerify = await import("@/lib/doc-verify/backend.server");
+  const gstin = docVerify.pickRegistryNumber("gst", gstDoc.extractedFields);
+  const pan = docVerify.pickRegistryNumber("pan", panDoc.extractedFields);
+  if (!gstin || !pan) return [];
+
+  const cross = docVerify.crossCheckGstPan(gstin, pan);
+  if (cross && !cross.matched) {
+    return [
+      "The PAN encoded in your GST number doesn't match your uploaded PAN document — these usually need to belong to the same business/individual. Double-check both documents are genuinely yours before resubmitting.",
+    ];
+  }
+  return [];
 }
 
 export async function finalizeSubmission(
@@ -597,9 +632,10 @@ export async function finalizeSubmission(
       : 0;
   const anyRejected = documents.some((d) => d.decision === "REJECTED");
   const anyReview = documents.some((d) => d.decision === "UNDER_REVIEW");
+  const crossCheckIssues = await checkGstPanConsistency(documents);
 
   let overallDecision: VerificationDecision;
-  if (anyRejected) overallDecision = "REJECTED";
+  if (anyRejected || crossCheckIssues.length > 0) overallDecision = "REJECTED";
   else if (documents.length === 0 || anyReview) overallDecision = "UNDER_REVIEW";
   else overallDecision = "VERIFIED";
 
@@ -611,6 +647,7 @@ export async function finalizeSubmission(
     documentCount: documents.length,
     form: form || null,
     updatedAt: Date.now(),
+    issues: crossCheckIssues,
   };
 
   await admin().from("events").insert({ name: "mv.submission", props: record });
@@ -618,6 +655,7 @@ export async function finalizeSubmission(
     overallDecision,
     overallConfidence: record.overallConfidence,
     documentCount: documents.length,
+    crossCheckIssues,
   });
 
   return {
@@ -625,6 +663,7 @@ export async function finalizeSubmission(
     confidence: record.overallConfidence,
     documentCount: documents.length,
     updatedAt: record.updatedAt,
+    issues: crossCheckIssues.length > 0 ? crossCheckIssues : undefined,
   };
 }
 
