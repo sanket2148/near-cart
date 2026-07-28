@@ -186,10 +186,12 @@ export type AdminShop = {
   isOpen: boolean;
   city: string;
   createdAt: number;
+  claimed: boolean;
+  source: string;
 };
 
 const ADMIN_SHOP_SELECT =
-  "id, name, is_open, city, created_at, users(full_name, phone), shop_verifications(business_type, overall_status)";
+  "id, name, is_open, city, created_at, claimed, source, users(full_name, phone), shop_verifications(business_type, overall_status)";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mapAdminShopRow(row: any): AdminShop {
@@ -207,6 +209,8 @@ function mapAdminShopRow(row: any): AdminShop {
     isOpen: Boolean(row.is_open),
     city: row.city ?? "",
     createdAt: new Date(row.created_at).getTime(),
+    claimed: Boolean(row.claimed),
+    source: row.source ?? "manual",
   };
 }
 
@@ -218,6 +222,80 @@ export async function listAllShops(): Promise<AdminShop[]> {
     .limit(500);
   if (error) throw new Error(`listAllShops failed: ${error.message}`);
   return (data ?? []).map(mapAdminShopRow);
+}
+
+/**
+ * Safety valve for a claim gone wrong — GPS proximity (seller-data's
+ * claimShop) makes squatting a real listing much harder, but not
+ * impossible (a spoofed location, or someone who really was standing
+ * there but isn't who they claim to be), and until now there was no way
+ * back once `claimed` flipped true. Resets the shop to the unclaimed pool
+ * so the real operator can claim it themselves.
+ *
+ * Deliberately narrow: only OSM-imported listings (`source = 'osm'`) can
+ * be released — a merchant's own directly-created shop was never part of
+ * the unclaimed pool, so "releasing" it would incorrectly open it up to
+ * any stranger. Only pre-approval shops can be released — an approved,
+ * live shop's ownership dispute is a real support case, not a self-service
+ * button. Products are wiped as part of the release: an OSM-imported shop
+ * has zero products until someone claims it (the importer never inserts
+ * any), so anything present was added by the claimant being released, not
+ * pre-existing data worth preserving. If the shop has real orders on file,
+ * the products delete hits `order_items.product_id`'s FK (no cascade) and
+ * fails loudly instead of silently orphaning order history — surfaced here
+ * as a clear "handle manually" error rather than the raw constraint text.
+ */
+export async function releaseShopClaim(shopId: string): Promise<void> {
+  const { data: shop, error: shopErr } = await admin()
+    .from("shops")
+    .select("owner_id, claimed, source, name, shop_verifications(overall_status)")
+    .eq("id", shopId)
+    .maybeSingle();
+  if (shopErr) throw new Error(`releaseShopClaim failed: ${shopErr.message}`);
+  if (!shop) throw new Error("Shop not found.");
+  if (shop.source !== "osm") {
+    throw new Error("Only listings imported from OpenStreetMap can be released back to the unclaimed pool.");
+  }
+  if (!shop.claimed) throw new Error("This shop isn't currently claimed.");
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const v = Array.isArray((shop as any).shop_verifications)
+    ? (shop as any).shop_verifications[0]
+    : (shop as any).shop_verifications;
+  if (v?.overall_status === "approved") {
+    throw new Error(
+      "This shop is already approved and live — releasing it isn't self-service. Handle this as a manual support case.",
+    );
+  }
+
+  const previousOwnerId: string | null = shop.owner_id;
+
+  const { error: productsErr } = await admin().from("products").delete().eq("shop_id", shopId);
+  if (productsErr) {
+    throw new Error(
+      productsErr.code === "23503"
+        ? "This shop has real orders on file — can't release automatically. Handle this as a manual support case."
+        : `releaseShopClaim failed: ${productsErr.message}`,
+    );
+  }
+
+  const { error: verifyErr } = await admin().from("shop_verifications").delete().eq("shop_id", shopId);
+  if (verifyErr) throw new Error(`releaseShopClaim failed: ${verifyErr.message}`);
+
+  const { error: resetErr } = await admin()
+    .from("shops")
+    .update({ owner_id: null, claimed: false, claimed_at: null })
+    .eq("id", shopId);
+  if (resetErr) throw new Error(`releaseShopClaim failed: ${resetErr.message}`);
+
+  if (previousOwnerId) {
+    await insertNotification(
+      previousOwnerId,
+      "verification_status",
+      "Shop claim reset",
+      `Your claim on "${shop.name}" was reviewed and reset by NearCart. Contact support if you believe this was a mistake.`,
+      { shopId },
+    );
+  }
 }
 
 export async function suspendShop(shopId: string): Promise<void> {

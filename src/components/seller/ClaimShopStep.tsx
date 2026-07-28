@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, CheckCircle2, Loader2, MapPin, Search } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Loader2, MapPin, MapPinned, Search } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,17 @@ import {
   type UnclaimedShop,
 } from "@/lib/seller";
 import { BUSINESS_TYPE_CONFIG, type BusinessType } from "@/lib/verification";
+import { LocationPinMap } from "@/components/LocationPinMap";
+import { haversineKm, type LatLng } from "@/lib/geo";
+
+type PinStatus = "idle" | "requesting" | "ready" | "denied";
+
+// How far a claimant's GPS reading can be from the shop's own pinned
+// location before the real server-side check (claimShop, seller-data/
+// backend.server.ts) rejects the claim — kept in sync with
+// CLAIM_MAX_DISTANCE_M there so this page can warn before submitting
+// instead of only after a round trip.
+const CLAIM_MAX_DISTANCE_M = 200;
 
 type Props = {
   onClaimed: (shop: ShopProfile) => void;
@@ -25,6 +36,29 @@ export function ClaimShopStep({ onClaimed, onSwitchToCreate }: Props) {
   const [selected, setSelected] = useState<UnclaimedShop | null>(null);
   const [businessType, setBusinessType] = useState<BusinessType | null>(null);
   const [claiming, setClaiming] = useState(false);
+  // Real GPS reading at claim time — required, not optional, and never
+  // manually adjustable (unlike CreateShopStep's draggable pin): if a
+  // claimant could freely set the coordinates themselves, they could just
+  // type in the shop's own publicly-visible location instead of actually
+  // being there, defeating the whole point of the check.
+  const [coords, setCoords] = useState<LatLng | null>(null);
+  const [pinStatus, setPinStatus] = useState<PinStatus>("idle");
+
+  function requestLocation() {
+    setPinStatus("requesting");
+    if (typeof navigator === "undefined" || !("geolocation" in navigator)) {
+      setPinStatus("denied");
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        setPinStatus("ready");
+      },
+      () => setPinStatus("denied"),
+      { timeout: 8000, enableHighAccuracy: true },
+    );
+  }
 
   // Simple debounce — this search box has no other consumer, not worth a
   // shared hook for one call site.
@@ -47,10 +81,10 @@ export function ClaimShopStep({ onClaimed, onSwitchToCreate }: Props) {
   }, [query]);
 
   async function submitClaim() {
-    if (!selected || !businessType) return;
+    if (!selected || !businessType || !coords) return;
     setClaiming(true);
     try {
-      const shop = await claimShop(selected.id, businessType);
+      const shop = await claimShop(selected.id, businessType, coords.lat, coords.lng);
       onClaimed(shop);
     } catch (err) {
       toast.error(
@@ -60,6 +94,12 @@ export function ClaimShopStep({ onClaimed, onSwitchToCreate }: Props) {
       setClaiming(false);
     }
   }
+
+  const distanceM =
+    coords && selected?.lat != null && selected?.lng != null
+      ? haversineKm(coords, { lat: selected.lat, lng: selected.lng }) * 1000
+      : null;
+  const looksTooFar = distanceM != null && distanceM > CLAIM_MAX_DISTANCE_M;
 
   if (selected) {
     const types = Object.entries(BUSINESS_TYPE_CONFIG) as [
@@ -118,11 +158,62 @@ export function ClaimShopStep({ onClaimed, onSwitchToCreate }: Props) {
             </div>
           </div>
 
+          <div className="space-y-1.5">
+            <Label>Confirm you're at the shop</Label>
+            <p className="text-xs text-muted-foreground">
+              To stop anyone from claiming a listing they don't actually run, we check that you're
+              physically at the shop right now.
+            </p>
+            {selected.lat != null && selected.lng != null && (
+              <LocationPinMap
+                center={{ lat: selected.lat, lng: selected.lng }}
+                onChange={() => {}}
+                interactive={false}
+                className="h-32 w-full rounded-xl"
+              />
+            )}
+            {coords ? (
+              <div
+                className={cn(
+                  "flex items-center gap-2 rounded-xl border p-3 text-xs font-medium",
+                  looksTooFar
+                    ? "border-destructive/30 bg-destructive/5 text-destructive"
+                    : "border-emerald-300 bg-emerald-50 text-emerald-800",
+                )}
+              >
+                <CheckCircle2 className="h-4 w-4 shrink-0" />
+                {looksTooFar
+                  ? `Location confirmed, but you look about ${Math.round(distanceM!)}m from this shop — the claim may be rejected.`
+                  : "Location confirmed — you're at the shop."}
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={requestLocation}
+                disabled={pinStatus === "requesting"}
+                className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-border bg-card p-3 text-sm font-semibold text-primary hover:border-primary/40 disabled:opacity-60"
+              >
+                {pinStatus === "requesting" ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <MapPinned className="h-4 w-4" />
+                )}
+                Confirm my current location
+              </button>
+            )}
+            {pinStatus === "denied" && (
+              <p className="text-xs text-destructive">
+                Couldn't get your location — check your browser's location permission and try
+                again.
+              </p>
+            )}
+          </div>
+
           <Button
             variant="hero"
             size="xl"
             className="w-full"
-            disabled={!businessType || claiming}
+            disabled={!businessType || !coords || claiming}
             onClick={submitClaim}
           >
             {claiming ? <Loader2 className="h-4 w-4 animate-spin" /> : "Claim this shop"}

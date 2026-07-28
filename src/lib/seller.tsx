@@ -122,7 +122,14 @@ export async function createShop(input: NewShopInput): Promise<ShopProfile> {
   }) as unknown as Promise<ShopProfile>;
 }
 
-export type UnclaimedShop = { id: string; name: string; addressLine: string; city: string };
+export type UnclaimedShop = {
+  id: string;
+  name: string;
+  addressLine: string;
+  city: string;
+  lat?: number;
+  lng?: number;
+};
 
 /** Search unclaimed (OpenStreetMap-imported) shop listings by name, for the "is this your shop?" claim flow. */
 export async function searchUnclaimedShops(query: string): Promise<UnclaimedShop[]> {
@@ -140,9 +147,19 @@ export async function findPossibleShopMatches(
   >;
 }
 
-/** Claim an unclaimed shop for this account — throws if it was already claimed by someone else. */
-export async function claimShop(shopId: string, businessType: BusinessType): Promise<ShopProfile> {
-  return claimShopFn({ data: { shopId, businessType } }) as unknown as Promise<ShopProfile>;
+/**
+ * Claim an unclaimed shop for this account — throws if it was already
+ * claimed by someone else, or if `lat`/`lng` (the claimant's real GPS
+ * reading) isn't close enough to the shop's own pinned location. See
+ * seller-data/backend.server.ts's claimShop for why that check exists.
+ */
+export async function claimShop(
+  shopId: string,
+  businessType: BusinessType,
+  lat: number,
+  lng: number,
+): Promise<ShopProfile> {
+  return claimShopFn({ data: { shopId, businessType, lat, lng } }) as unknown as Promise<ShopProfile>;
 }
 
 const MIN = 60 * 1000;

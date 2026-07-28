@@ -70,6 +70,14 @@ export const reactivateShop = createServerFn({ method: "POST" })
     return be.reactivateShop(data.shopId);
   });
 
+export const releaseShopClaim = createServerFn({ method: "POST" })
+  .middleware([adminMiddleware])
+  .inputValidator(z.object({ shopId: z.string().min(1) }))
+  .handler(async ({ data }) => {
+    const be = await import("./backend.server");
+    return be.releaseShopClaim(data.shopId);
+  });
+
 // ─── Partners ────────────────────────────────────────────────────────────
 
 export const listAllPartners = createServerFn({ method: "GET" })

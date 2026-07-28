@@ -6,7 +6,7 @@ import { Search, Loader2, Store } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { listAllShops, suspendShop, reactivateShop } from "@/lib/admin-data/api.functions";
+import { listAllShops, suspendShop, reactivateShop, releaseShopClaim } from "@/lib/admin-data/api.functions";
 
 export const Route = createFileRoute("/admin/shops")({
   component: AdminShopsPage,
@@ -59,6 +59,26 @@ function AdminShopsPage() {
       queryClient.invalidateQueries({ queryKey: ["admin-shops"] });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not reactivate shop");
+    } finally {
+      setPendingId(null);
+    }
+  }
+
+  async function handleReleaseClaim(shopId: string, shopName: string) {
+    if (
+      !window.confirm(
+        `Release "${shopName}" back to the unclaimed pool? This removes its current owner and deletes any products they added — only do this for a claim that shouldn't have gone through.`,
+      )
+    ) {
+      return;
+    }
+    setPendingId(shopId);
+    try {
+      await releaseShopClaim({ data: { shopId } });
+      toast.success("Claim released — shop is unclaimed again");
+      queryClient.invalidateQueries({ queryKey: ["admin-shops"] });
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not release this claim");
     } finally {
       setPendingId(null);
     }
@@ -143,6 +163,17 @@ function AdminShopsPage() {
                       onClick={() => handleSuspend(shop.id)}
                     >
                       Suspend
+                    </Button>
+                  )}
+                  {shop.claimed && shop.source === "osm" && shop.overallStatus !== "approved" && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-amber-500 text-amber-700 hover:bg-amber-50"
+                      disabled={pendingId === shop.id}
+                      onClick={() => handleReleaseClaim(shop.id, shop.name)}
+                    >
+                      Release claim
                     </Button>
                   )}
                 </div>

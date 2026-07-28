@@ -17,6 +17,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { Product } from "@/lib/data";
 import type { BusinessType, BadgeTier } from "@/lib/verification";
 import { insertNotification, notifyLowStockCrossings } from "@/lib/notifications/backend.server";
+import { haversineKm } from "@/lib/geo";
 
 let _admin: SupabaseClient | null = null;
 
@@ -238,13 +239,16 @@ export type UnclaimedShop = {
   name: string;
   addressLine: string;
   city: string;
+  /** Present from searchUnclaimedShops; find_shop_matches (findPossibleShopMatches below) doesn't return coordinates, so this is undefined from that caller. */
+  lat?: number;
+  lng?: number;
 };
 
 /** Simple name search over unclaimed listings — enough for a merchant to find "is this my shop?" during onboarding. */
 export async function searchUnclaimedShops(query: string): Promise<UnclaimedShop[]> {
   const { data, error } = await admin()
     .from("shops")
-    .select("id, name, address_line, city")
+    .select("id, name, address_line, city, lat, lng")
     .eq("claimed", false)
     .eq("status", "active")
     .ilike("name", `%${query}%`)
@@ -255,6 +259,8 @@ export async function searchUnclaimedShops(query: string): Promise<UnclaimedShop
     name: row.name,
     addressLine: row.address_line,
     city: row.city,
+    lat: row.lat,
+    lng: row.lng,
   }));
 }
 
@@ -327,13 +333,48 @@ async function retryFlaky<T>(fn: () => Promise<T>, attempts = 3, delayMs = 150):
   throw lastErr;
 }
 
+// How close a claimant's real GPS reading has to be to the shop's own
+// pinned location to claim it — see claimShop below. 200m matches the
+// radius find_shop_matches (migration 0014) already uses elsewhere for
+// "close enough to be the same real place," generous enough for ordinary
+// urban GPS drift (5-50m is typical, more indoors) without letting someone
+// claim a shop from across town.
+const CLAIM_MAX_DISTANCE_M = 200;
+
 export async function claimShop(
   shopId: string,
   callerId: string,
   businessType: BusinessType,
+  claimantLat: number,
+  claimantLng: number,
 ): Promise<ShopProfile> {
   const already = await getMyShop(callerId);
   if (already) throw new Error("You already have a shop — one account can only own one shop.");
+  assertRealCoords(claimantLat, claimantLng);
+
+  // Before this, claiming an unclaimed listing required nothing more than
+  // knowing its name — anyone could claim any real shop from anywhere,
+  // permanently locking out whoever actually runs it (no unclaim path
+  // existed once claimed). Requiring the claimant's real GPS to be near the
+  // shop's own pinned location is a genuine bar: it takes physical presence
+  // (or spoofing a device's location), not just a form submission. Checked
+  // before the claim itself, not after — no point racing for the row if the
+  // caller isn't even in the right place.
+  const { data: target, error: targetErr } = await admin()
+    .from("shops")
+    .select("lat, lng")
+    .eq("id", shopId)
+    .eq("claimed", false)
+    .maybeSingle();
+  if (targetErr) throw new Error(`claimShop failed: ${targetErr.message}`);
+  if (!target) throw new Error("This shop was already claimed — someone got there first.");
+  const distanceM =
+    haversineKm({ lat: claimantLat, lng: claimantLng }, { lat: target.lat, lng: target.lng }) * 1000;
+  if (distanceM > CLAIM_MAX_DISTANCE_M) {
+    throw new Error(
+      `You need to be at the shop to claim it — you're about ${Math.round(distanceM)}m away.`,
+    );
+  }
 
   const { data: claimed, error } = await admin()
     .from("shops")
@@ -344,6 +385,21 @@ export async function claimShop(
     .maybeSingle();
   if (error) throw new Error(`claimShop failed: ${error.message}`);
   if (!claimed) throw new Error("This shop was already claimed — someone got there first.");
+
+  // Best-effort audit trail for admin review/dispute resolution — never
+  // blocks the claim itself if logging fails (same "never throw" contract
+  // as insertNotification elsewhere in this codebase).
+  try {
+    await admin()
+      .from("events")
+      .insert({
+        user_id: callerId,
+        name: "shop_claim",
+        props: { shopId, distanceM: Math.round(distanceM), claimantLat, claimantLng },
+      });
+  } catch (err) {
+    console.error("shop_claim event logging failed:", err instanceof Error ? err.message : err);
+  }
 
   await retryFlaky(async () => {
     const { error: verifyErr } = await admin()

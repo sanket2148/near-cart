@@ -64,11 +64,18 @@ export const findPossibleShopMatches = createServerFn({ method: "GET" })
 
 export const claimShop = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
-  .inputValidator(z.object({ shopId: z.string().min(1), businessType: z.string().min(1) }))
+  .inputValidator(
+    z.object({
+      shopId: z.string().min(1),
+      businessType: z.string().min(1),
+      lat: z.number(),
+      lng: z.number(),
+    }),
+  )
   .handler(async ({ context, data }) => {
     const be = await import("./backend.server");
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return be.claimShop(data.shopId, context.uid, data.businessType as any);
+    return be.claimShop(data.shopId, context.uid, data.businessType as any, data.lat, data.lng);
   });
 
 // patch is now an explicit allowlisted shape instead of z.record(z.string(),
